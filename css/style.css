@@ -171,6 +171,10 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
 .help-box { width: 640px; font-size: 14px; line-height: 1.5; }
 .help-box li { margin-bottom: 6px; }
 
+/* danışman */
+.advisor { background: linear-gradient(90deg, rgba(79,195,255,0.12), rgba(79,195,255,0.03)); border: 1px solid rgba(79,195,255,0.35); border-radius: 9px; padding: 8px 11px; font-size: 12px; margin-bottom: 10px; line-height: 1.5; }
+.advisor .adv-title { font-weight: 800; font-size: 12px; letter-spacing: 1px; color: var(--accent); margin-bottom: 2px; }
+.advisor b { color: #fff; }
 /* dokunmatik */
 .touch { position: absolute; inset: auto 0 8px 0; display: flex; justify-content: space-between; padding: 0 8px; pointer-events: none; }
 .tgroup { display: flex; flex-wrap: wrap; gap: 6px; max-width: 46vw; pointer-events: auto; }
@@ -188,4 +192,28 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
   #profile { height: 100px; }
   #log { max-height: 90px; }
   .hud-bottom { display: none; }
+}
+
+@media (max-width: 600px) {
+  .hg-top { gap: 8px; }
+  .brand small { display: none; }
+  .hg-stats { gap: 10px; }
+  .hg-stats b { font-size: 13px; }
+  .hg-stats label { font-size: 9px; }
+  .tabs { overflow-x: auto; flex-wrap: nowrap; }
+  .tabs button { white-space: nowrap; }
+  .tab-body { padding: 10px; }
+  .cards { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  .hud-left { width: 165px; font-size: 10px; padding: 6px 8px; top: 6px; left: 6px; }
+  .hud-left .row.small, .hud-left #h-fuel { display: none; }
+  .hud-right { width: 160px; padding: 6px; top: 6px; right: 6px; }
+  #profile { display: none; }
+  #log { max-height: 70px; font-size: 10px; }
+  .cams button { font-size: 9px; padding: 2px 4px; }
+  #h-clock { font-size: 20px; }
+  #h-phase { font-size: 10px; }
+  #banner { font-size: 16px; top: 70px; white-space: normal; width: 90vw; }
+  .land-panel { width: 92vw; bottom: 118px; font-size: 11px; }
+  .res-box { padding: 16px; }
+  .touch button { min-width: 44px; height: 40px; font-size: 10px; }
 }

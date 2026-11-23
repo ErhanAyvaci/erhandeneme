@@ -298,7 +298,10 @@ window.MODELS = function (T) {
       const sd = box(0.45, 0.9, 0.2, M.engineDark, Math.cos(a) * 1.45, 5.6, Math.sin(a) * 1.45); sd.rotation.y = -a + PI / 2; sd.rotation.z = 0.32; g.add(sd);
       if (crew && i % 2) { const win = box(0.35, 0.35, 0.05, M.black, Math.cos(a + 0.6) * 1.55, 5.0, Math.sin(a + 0.6) * 1.55); win.rotation.y = -a; g.add(win); }
     }
-    const nose = mesh(new T.SphereGeometry(0.78, 24, 12, 0, PI * 2, 0, PI / 2), w, 0, 7.3, 0); g.add(nose);
+    const hinge = new T.Group(); hinge.position.set(0, 7.3, -0.75); g.add(hinge);
+    const nose = mesh(new T.SphereGeometry(0.78, 24, 12, 0, PI * 2, 0, PI / 2), w, 0, 0, 0.75); hinge.add(nose);
+    const port = cyl(0.45, 0.5, 0.25, M.alu, 7.35, 20); g.add(port);
+    g.userData.nose = hinge;
     return { g, mats: ml, len: 8.1 };
   }
 
@@ -516,5 +519,21 @@ window.MODELS = function (T) {
     return g;
   }
 
-  return { M, falconBooster, falconUpper, fairingHalves, payloadStack, dragon, superHeavy, ship, satellite, falconPad, landingZone, mechazilla, starbaseExtras, droneShip, fairingShip, parachute, canvasTex, bellGeo };
+  function station() {
+    const g = new T.Group();
+    const truss = box(2.2, 2.2, 108, M.alu, 0, 0, 0); g.add(truss);
+    const arr = new T.MeshStandardMaterial({ map: solarTex, color: 0xd9b36a, roughness: 0.35, metalness: 0.6, side: T.DoubleSide, emissive: 0x1a1204 });
+    for (const z of [-48, -36, 36, 48]) for (const s of [-1, 1]) {
+      const p = new T.Mesh(new T.PlaneGeometry(12, 34), arr); p.position.set(0, s * 19, z); g.add(p);
+    }
+    for (const z of [-30, 30]) { const r = new T.Mesh(new T.PlaneGeometry(4, 14), M.paint); r.rotation.y = PI / 2; r.position.set(0, 0, z * 0.6); r.rotation.z = PI / 2; g.add(r); }
+    // modüller (X ekseni boyunca)
+    const mods = [[-14, 4.2, 9], [-4, 4.2, 9], [6, 4.2, 9], [15, 3.6, 7], [23, 3.6, 6]];
+    for (const [x, r, l] of mods) { const m = mesh(new T.CylinderGeometry(r * 0.5, r * 0.5, l, 20), M.white, x, -4, 0); m.rotation.z = PI / 2; g.add(m); }
+    const node = mesh(new T.SphereGeometry(2.4, 16, 12), M.white, 28, -4, 0); g.add(node);
+    const port = cyl(0.8, 0.8, 1.5, M.alu, 0, 12); port.position.set(31, -4, 0); port.rotation.z = PI / 2; g.add(port);
+    g.userData.port = new T.Vector3(32.5, -4, 0);
+    return g;
+  }
+  return { station, M, falconBooster, falconUpper, fairingHalves, payloadStack, dragon, superHeavy, ship, satellite, falconPad, landingZone, mechazilla, starbaseExtras, droneShip, fairingShip, parachute, canvasTex, bellGeo };
 };

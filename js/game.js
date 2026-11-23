@@ -858,8 +858,16 @@
         sats3d.push({ g, t: -(isSS ? i * 0.6 : 0), vel: isSS ? [rnd(0.4, 0.9), rnd(-0.1, 0.1), rnd(-0.2, 0.2)] : [rnd(-0.3, 0.3), rnd(0.05, 0.6), rnd(-0.3, 0.3)], spin: [rnd(-0.2, 0.2), rnd(-0.2, 0.2), rnd(-0.2, 0.2)] });
       }
       if (payloadMesh) payloadMesh.visible = false;
+    } else if (kind === 'dragon' && payloadMesh) {
+      // Dragon ayrılır, burun kapağı açılır ve uzay istasyonuna yanaşır
+      const g = payloadMesh; payloadMesh = null;
+      const iss = MD.station();
+      iss.position.set(-45, payloadTop + 130, -60); iss.rotation.set(0, 0, -Math.PI / 2);
+      v.g.add(iss);
+      sats3d.push({ g, t: 0, vel: [0, 0, 0], spin: [0, 0, 0], dock: { iss, from: g.position.clone(), T: 32 }, keep: true });
+      sats3d.push({ g: iss, t: 0, vel: [0, 0, 0], spin: [0, 0, 0], keep: true, life: 120 });
     } else if (payloadMesh) {
-      // tek yük (Dragon / röle / ticari): kademeden ayrılıp uzaklaşır
+      // tek yük (röle / ticari uydu): kademeden ayrılıp uzaklaşır
       const g = payloadMesh; payloadMesh = null;
       sats3d.push({ g, t: 0, vel: [0, 0.5, 0], spin: [0, 0.02, 0], keep: true });
     }
@@ -869,6 +877,18 @@
       const s = sats3d[i]; s.t += dt;
       if (s.t < 0) { s.g.visible = false; continue; }
       s.g.visible = true;
+      if (s.dock) {
+        const d = s.dock, k = clamp(s.t / d.T, 0, 1), e = k * k * (3 - 2 * k);
+        const port = d.iss.localToWorld(d.iss.userData.port.clone()); s.g.parent.worldToLocal(port);
+        const tgt = port.clone().add(new T.Vector3(0, -8.1, 0).applyQuaternion(s.g.quaternion).multiplyScalar(0));
+        s.g.position.lerpVectors(d.from, tgt, e);
+        const lookDir = new T.Vector3().subVectors(port, d.from).normalize();
+        s.g.quaternion.slerp(new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), lookDir), Math.min(1, dt * 0.8));
+        if (s.g.userData.nose) s.g.userData.nose.rotation.x = -Math.min(1.9, s.t * 0.4);
+        if (k >= 1 && !d.done) { d.done = true; banner('DRAGON İSTASYONA KENETLENDİ', 'good'); log('Dragon uzay istasyonuna kenetlendi', 'good'); }
+        if (s.t > 150) { s.g.parent && s.g.parent.remove(s.g); sats3d.splice(i, 1); }
+        continue;
+      }
       s.g.position.x += s.vel[0] * dt; s.g.position.y += s.vel[1] * dt; s.g.position.z += s.vel[2] * dt;
       s.g.rotation.x += s.spin[0] * dt; s.g.rotation.y += s.spin[1] * dt; s.g.rotation.z += s.spin[2] * dt;
       if (s.g.userData.panels) for (const p of s.g.userData.panels) { p.scale.x = clamp((s.t - 3) / 4, 0.05, 1); }
@@ -1256,15 +1276,16 @@
 
   function updateStatics(sky) {
     const inFlight = mode === 'flight' && !cam.map;
+    const lowCam = sky && sky.hc < 45000;
     const ss = mission ? mission.key === 'ss' : P.state.sel.rocket === 'ss';
-    placeSurface(siteCap, 0, 0); siteCap.visible = inFlight;
+    placeSurface(siteCap, 0, 0); siteCap.visible = inFlight && lowCam;
     placeSurface(falconPad.g, 0, 0); falconPad.g.visible = inFlight && !ss;
     for (const g of lzPads) { placeSurface(g, g.userData.d, 0); g.visible = inFlight && !ss; }
     placeSurface(starTower.g, 0, 0); starTower.g.visible = inFlight && ss;
     placeSurface(starExtras, 0, 0); starExtras.visible = inFlight && ss;
     placeSurface(starTower2.g, 350, 0); starTower2.g.visible = inFlight && ss;
     if (mission && mission.shipD !== undefined) {
-      droneShipV.g.visible = inFlight; shipCap.visible = inFlight;
+      droneShipV.g.visible = inFlight; shipCap.visible = inFlight && lowCam;
       placeSurface(droneShipV.g, mission.shipD, 0);
       const ph = mission.t * 2 * Math.PI / 9;
       droneShipV.g.translateY(mission.waves * 0.5 * Math.sin(ph));
@@ -1273,7 +1294,7 @@
     } else { droneShipV.g.visible = false; shipCap.visible = false; }
     if (mission && mission.fairingShipD !== undefined) {
       fairingShipV.g.visible = inFlight; placeSurface(fairingShipV.g, mission.fairingShipD, 1);
-      if (!shipCap.visible) { shipCap.visible = inFlight; placeSurface(shipCap, mission.fairingShipD, -0.6); }
+      if (!shipCap.visible && lowCam) { shipCap.visible = inFlight; placeSurface(shipCap, mission.fairingShipD, -0.6); }
     } else fairingShipV.g.visible = false;
     if (shipCap.visible) { waveNormal.offset.x = (performance.now() / 1000) * 0.002; waveNormal.offset.y = (performance.now() / 1000) * 0.0013; }
     // gece projektörleri
@@ -1395,7 +1416,7 @@
       case 'caught': log(nm + (d.ship ? ' YÖRÜNGEDEN DÖNÜP YAKALANDI!' : ' KULE TARAFINDAN YAKALANDI!'), 'good'); banner('YAKALANDI!', 'good'); autoCamTimer = 8; landFX(c); break;
       case 'explode': explodeFX(c, d.why, d.reentry); if (c.id === camFocusId) autoCamTimer = 6; break;
       case 'msg': log(d.text, d.bad ? 'bad' : ''); if (d.bad) banner(d.text.length > 48 ? d.text.slice(0, 46) + '…' : d.text, 'bad'); break;
-      case 'end': clearTimeout(endTimer); endTimer = setTimeout(() => finishMission(d), d.ok ? 3500 : 7000); break;
+      case 'end': clearTimeout(endTimer); endTimer = setTimeout(() => finishMission(d), d.ok ? (d.kind === 'dragon' ? 36000 : 3500) : 7000); if (d.ok && d.kind === 'dragon') { setFocus(mission.stack); cam.tdist = 260; cam.mode = 'chase'; } break;
     }
   }
   function puffs(c, kind) {

@@ -180,6 +180,9 @@
   }
   function save() { try { if (typeof localStorage !== 'undefined') localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* yok say */ } }
   function reset() { state = newState(); save(); return state; }
+  function importState(text) {
+    try { const s = JSON.parse(text); if (!s || s.v !== 2 || typeof s.money !== 'number') return false; state = Object.assign(newState(), s); save(); return true; } catch (e) { return false; }
+  }
   function log(text, kind) { state.log.unshift({ w: state.week, text, kind: kind || '' }); if (state.log.length > 80) state.log.length = 80; }
   const yearOf = w => 2008 + Math.floor((w - 1) / 52);
   const weekLabel = w => `${yearOf(w)} · Hafta ${((w - 1) % 52) + 1}`;
@@ -272,7 +275,9 @@
       const dirSign = R() < 0.5 ? -1 : 1;
       return { jet, wind, windDir: dirSign, waves, hour: Math.floor(R() * 24), cloud: Math.round(R() * 100), base };
     };
-    return { cape: mk('cape'), starbase: mk('starbase') };
+    const w = { cape: mk('cape'), starbase: mk('starbase') };
+    if (st.week <= 2) for (const k of ['cape', 'starbase']) { w[k].jet = Math.min(w[k].jet, 28); w[k].waves = Math.min(w[k].waves, 1.4); w[k].wind = Math.min(w[k].wind, 6); w[k].hour = 10 + st.week * 3; }
+    return w;
   }
   function weatherRisks(w, plan) {
     const r = [];
@@ -672,13 +677,40 @@
     state.accepted.push(c); log('Sözleşme kabul edildi: ' + c.name + ' (avans ' + (c.advance / M).toFixed(1) + ' M$)', ''); save(); return true;
   }
   function setSel(o) { Object.assign(state.sel, o); save(); }
+  /* ---------------- Danışman: sıradaki adımlar ---------------- */
+  function advice() {
+    const out = [], st = state, net = network();
+    const sel = st.sel, info = ROCKET_INFO[sel.rocket];
+    const ready = readyCores(info.core).length, pending = st.fleet.some(c => c.type === info.core && (c.status === 'building' || c.status === 'refurb'));
+    if (!st.stats.launches) out.push('İlk adım: <b>Sözleşmeler</b> sekmesinden "Teknoloji gösterimi" teklifini kabul et (%30 avans), sonra Falcon 1 ile fırlat.');
+    if (ready < info.cores && !pending) out.push(`Hazır ${CORE_INFO[info.core].name} yok — <b>Filo</b> sekmesinden ya da aşağıdaki düğmeyle sipariş ver.`);
+    if (st.stats.success.f1 < 2) out.push(`Falcon 1 ile <b>${2 - st.stats.success.f1}</b> başarılı uçuş daha → Ar-Ge'de <b>Izgara kanatçıkları</b> açılır (iniş testleri başlar).`);
+    const cand = RESEARCH.filter(r => !has(r.id) && reqStatus(r).length === 0);
+    if (cand.length) {
+      const c = cand.sort((a, b) => a.cost - b.cost)[0];
+      out.push(`Ar-Ge'de araştırılabilir: <b>${c.name}</b> (${(c.cost / M).toFixed(0)} M$)${st.money < c.cost ? ' — bütçe yetmiyor' : ''}.`);
+    }
+    if (has('u_v09') && !fac('satFab')) out.push('Starlink açıldı: <b>Tesisler</b> sekmesinden <b>Uydu fabrikası</b> kur.');
+    if (totalSats() > 0 && !Object.keys(st.stations).length) out.push('Uyduların hizmet verebilmesi için <b>Ağ</b> sekmesinden bir yer istasyonu kur (en kalabalık bölge: Kuzey Amerika / Avrupa).');
+    if (net.capLimited) out.push('Ağ <b>kapasite sınırında</b>: daha çok ya da daha yeni nesil uydu fırlat.');
+    const oceanCov = net.regions.filter(r => !r.land && r.cov > 0.3 && r.conn === 0);
+    if (oceanCov.length && !has('u_v15')) out.push('Okyanuslar kapsamada ama bağlantı yok: <b>Starlink v1.5 (lazer)</b> ya da <b>GEO röle</b> araştır.');
+    const polar = net.regions.filter(r => Math.abs(r.lat) > 60 && r.cov < 0.2);
+    if (totalSats() > 300 && polar.length) out.push(has('u_polar') ? 'Kutup ve yüksek enlemler kapsanmıyor: <b>70° / 97.6°</b> kabuklara fırlat.' : 'Yüksek enlemler için Ar-Ge: <b>Yüksek eğimli yörüngeler</b>.');
+    const w = st.weather[info.site === 'starbase' ? 'starbase' : 'cape'];
+    if (w.jet > 50) out.push(`Bu hafta jet akımı çok güçlü (${w.jet} m/s) — fırlatmayı ertelemeyi düşün.`);
+    const exp = st.accepted.filter(c => c.expires - st.week <= 1);
+    if (exp.length) out.push(`Süresi dolmak üzere sözleşme: <b>${exp[0].name}</b> (hafta ${exp[0].expires}).`);
+    if (!out.length) out.push('Her şey yolunda. Fırlatmaya devam et ya da haftayı bitir.');
+    return out.slice(0, 3);
+  }
 
   global.PROG = {
     M, SAT_GENS, GEN_ORDER, SHELLS, REGIONS, SECTORS, ROCKET_INFO, CORE_INFO, RESEARCH, RESEARCH_BY_ID, BRANCHES, FACILITIES, ACHIEVEMENTS, CONTRACT_TYPES,
     GS_COST, RELAY_SAT_COST,
-    get state() { return state; }, load, save, reset, newState, weekLabel, yearOf,
+    get state() { return state; }, load, save, reset, importState, newState, weekLabel, yearOf,
     stockCap, has, fac, totalSats, currentGen, reqStatus, canResearch, doResearch, facilityNext, buildFacility, satRate, refurbWeeks,
     coreOrderInfo, orderCore, readyCores, network, buildStation, availableModes, payloadTypes, plan, commit, applyResult, endWeek,
-    acceptContract, setSel, weatherRisks, failChance, maxFlights, log,
+    advice, acceptContract, setSel, weatherRisks, failChance, maxFlights, log,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

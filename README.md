@@ -5,8 +5,19 @@ Amacın: uydu ağınla **dünya nüfusunun %95'ine internet** ulaştırmak.
 
 ## Çalıştırma
 
-`index.html` dosyasını tarayıcıda açman yeterli (Three.js CDN'den yüklendiği için internet gerekir).
-İstersen yerel sunucuyla: `python3 -m http.server 8000` → `http://localhost:8000`
+- **Vercel / herhangi bir statik sunucu:** Three.js repoda gömülü (`vendor/three`), internet bağlantısı veya derleme gerekmez.
+- **Yerel:** `python3 -m http.server 8000` → `http://localhost:8000`
+- **Dosyayı doğrudan açmak** (`index.html` çift tık) da çalışır; bu durumda Three.js CDN'den yüklenir (internet gerekir).
+
+## Vercel'e yükleme
+
+Proje saf statik bir sitedir (derleme adımı yok). `vercel.json` önbellek başlıklarını ve temiz URL'leri ayarlar.
+
+1. <https://vercel.com/new> → **Import Git Repository** → bu repoyu seç.
+2. **Framework Preset:** `Other` · **Build Command:** boş · **Output Directory:** boş (kök dizin) · **Install Command:** boş.
+3. **Deploy**. Her push otomatik yeniden yayınlanır (varsayılan dal → production, diğer dallar → önizleme).
+
+Komut satırından: `npm i -g vercel && vercel --prod` (repo kök dizininde).
 
 ## Oyun döngüsü (haftalık tur)
 
@@ -68,7 +79,17 @@ Starbase (Starship + 2 Mechazilla kulesi), drone gemiler, burun konisi gemisi.
 | `K` | Uçuş sonlandırma (FTS) |
 | Fare / dokunmatik | Sürükle = döndür, tekerlek / iki parmak = yakınlaş |
 
+| `O` | Duraklat |
+| `U` | Sesi aç/kapat |
+
 Dokunmatik cihazlarda ekran düğmeleri otomatik görünür.
+
+## Diğer özellikler
+
+- **Danışman:** Fırlatma sekmesinde sıradaki mantıklı adımları önerir.
+- **Grafik kalitesi:** Düşük / Orta / Yüksek (yavaş cihazlarda otomatik düşer). Kayıt `localStorage`'da; **Kaydı indir / Kayıt yükle** ile başka cihaza taşınabilir.
+- **Ses:** Prosedürel motor sesi ses hızıyla gecikir (uzaktaki kamerada Doppler etkisi), havada sönümlenir; ses patlamaları, rüzgâr, patlamalar.
+- **Dragon:** Kargo/mürettebat görevlerinde kapsül ayrılır, burun kapağı açılır ve uzay istasyonuna kenetlenir.
 
 ## Dosyalar
 
@@ -79,3 +100,5 @@ Dokunmatik cihazlarda ekran düğmeleri otomatik görünür.
 - `js/hangar.js` — kontrol merkezi sekmeleri
 - `js/game.js` — 3D sahne, efektler, kamera, HUD
 - `js/textures.js` — gömülü Dünya dokuları (NASA Blue Marble / Black Marble türevleri, kamu malı)
+- `vendor/three/` — Three.js r160 (MIT lisansı) ve kullanılan eklentiler
+- `vercel.json`, `favicon.svg` — dağıtım yapılandırması

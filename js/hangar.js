@@ -23,6 +23,18 @@ window.HANGAR = (function () {
     $('btn-rep-close').onclick = () => $('report').classList.add('hidden');
     $('btn-reset').onclick = e => { e.preventDefault(); if (confirm('Tüm ilerleme silinsin mi?')) { P.reset(); render(); hooks.onWeek && hooks.onWeek(); } };
     $('btn-help').onclick = e => { e.preventDefault(); $('help').classList.remove('hidden'); };
+    $('btn-export').onclick = e => {
+      e.preventDefault();
+      const blob = new Blob([JSON.stringify(P.state)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'yorunge-agi-kayit-hafta' + P.state.week + '.json'; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    };
+    $('btn-import').onclick = e => { e.preventDefault(); $('file-import').click(); };
+    $('file-import').onchange = e => {
+      const f = e.target.files[0]; if (!f) return;
+      f.text().then(t => { if (P.importState(t)) { render(); hooks.onWeek && hooks.onWeek(); alert('Kayıt yüklendi.'); } else alert('Geçersiz kayıt dosyası.'); });
+      e.target.value = '';
+    };
     $('btn-help-close').onclick = () => $('help').classList.add('hidden');
     const img = new Image(); img.onload = () => { netImg = img; if (tab === 'net') render(); }; img.src = window.TEX ? window.TEX.day : '';
   }
@@ -56,7 +68,8 @@ window.HANGAR = (function () {
     const rockets = Object.entries(P.ROCKET_INFO);
     const plan = P.plan();
     sel.rocket = plan.rocket;
-    let h = '<h3>Roket</h3><div class="cards">';
+    let h = '<div class="advisor"><div class="adv-title">🧭 Danışman</div>' + P.advice().map(t => `<div>• ${t}</div>`).join('') + '</div>';
+    h += '<h3>Roket</h3><div class="cards">';
     for (const [k, I] of rockets) {
       const un = k === 'f1' || P.has(I.research);
       const ready = P.readyCores(I.core).length;
