@@ -281,30 +281,90 @@
     g.setIndex(idx); g.computeVertexNormals();
     return g;
   }
-  const coastE = n => 2600 + 420 * Math.sin(n / 2300) + 180 * Math.sin(n / 610 + 1.3) + 900 * Math.sin(n / 9000);
+  /* --- Gerçek kıyı şeridi (enlem → boylam tabloları, yaklaşık) --- */
+  const COAST = {
+    cape: {
+      shift: 1900, // oyun için rampa ~1.9 km iç kesime alındı (LZ'ler karada kalsın)
+      coast: [[28.10, -80.57], [28.20, -80.590], [28.30, -80.603], [28.40, -80.598], [28.42, -80.585], [28.44, -80.556], [28.46, -80.528], [28.48, -80.535], [28.52, -80.552], [28.56, -80.566], [28.60, -80.585], [28.65, -80.620], [28.70, -80.655], [28.75, -80.697], [28.80, -80.745], [28.95, -80.84]],
+      water: [
+        // Banana River
+        { lat: [28.10, 28.645], e: [[28.10, -80.598], [28.2, -80.605], [28.3, -80.616], [28.40, -80.612], [28.44, -80.600], [28.50, -80.591], [28.56, -80.598], [28.62, -80.615], [28.645, -80.640]], w: [[28.10, -80.625], [28.2, -80.640], [28.3, -80.655], [28.40, -80.655], [28.50, -80.650], [28.56, -80.655], [28.62, -80.655], [28.645, -80.645]] },
+        // Indian River
+        { lat: [28.05, 28.95], e: [[28.05, -80.63], [28.2, -80.660], [28.35, -80.700], [28.45, -80.705], [28.56, -80.705], [28.65, -80.712], [28.75, -80.725], [28.95, -80.80]], w: [[28.05, -80.67], [28.2, -80.700], [28.35, -80.730], [28.45, -80.745], [28.56, -80.760], [28.65, -80.790], [28.75, -80.800], [28.95, -80.85]] },
+        // Mosquito Lagoon
+        { lat: [28.66, 28.95], e: [[28.66, -80.640], [28.75, -80.690], [28.85, -80.75], [28.95, -80.82]], w: [[28.66, -80.660], [28.75, -80.730], [28.85, -80.79], [28.95, -80.835]] },
+        // Port Canaveral kanalı
+        { lat: [28.405, 28.415], e: [[28.405, -80.59], [28.415, -80.59]], w: [[28.405, -80.64], [28.415, -80.64]] },
+      ],
+      land: [0.16, 0.30, 0.12], land2: [0.30, 0.34, 0.18], sand: [0.62, 0.58, 0.44],
+    },
+    starbase: {
+      shift: 500,
+      coast: [[25.70, -97.16], [25.80, -97.150], [25.90, -97.142], [25.957, -97.145], [26.00, -97.150], [26.05, -97.155], [26.07, -97.160], [26.15, -97.168], [26.30, -97.180], [26.50, -97.25]],
+      water: [
+        // South Bay / Laguna Madre
+        { lat: [25.99, 26.50], e: [[25.99, -97.190], [26.02, -97.176], [26.06, -97.172], [26.072, -97.170], [26.10, -97.172], [26.3, -97.190], [26.5, -97.27]], w: [[25.99, -97.200], [26.02, -97.225], [26.06, -97.215], [26.08, -97.210], [26.10, -97.220], [26.3, -97.330], [26.5, -97.38]] },
+        // Brazos Santiago geçidi
+        { lat: [26.066, 26.074], e: [[26.066, -97.150], [26.074, -97.150]], w: [[26.066, -97.175], [26.074, -97.175]] },
+      ],
+      river: true,
+      land: [0.40, 0.37, 0.26], land2: [0.50, 0.45, 0.32], sand: [0.74, 0.68, 0.52], flats: [0.58, 0.54, 0.42],
+    },
+  };
+  function tableAt(tab, lat) {
+    if (lat <= tab[0][0]) return tab[0][1];
+    for (let i = 1; i < tab.length; i++) if (lat <= tab[i][0]) { const a = tab[i - 1], b = tab[i]; return lerp(a[1], b[1], (lat - a[0]) / (b[0] - a[0])); }
+    return tab[tab.length - 1][1];
+  }
+  // 0 = kara, 1 = okyanus, 2 = lagün/nehir; d = kıyıya uzaklık (m)
+  function surfaceClass(site, e, north) {
+    const s0 = SITES[site] || SITES.cape, C = COAST[site] || COAST.cape;
+    const kx = 111320 * Math.cos(s0.lat * D2R), ky = 110574;
+    const lat = s0.lat + north / ky, lon = s0.lon + (e - C.shift) / kx;
+    const cl = tableAt(C.coast, lat);
+    const dc = (lon - cl) * kx;
+    if (dc > 0) return { k: 1, d: dc };
+    let best = -dc;
+    for (const w of C.water) {
+      if (lat < w.lat[0] || lat > w.lat[1]) continue;
+      const le = tableAt(w.e, lat), lw = tableAt(w.w, lat);
+      if (lon < le && lon > lw) return { k: 2, d: Math.min(le - lon, lon - lw) * kx };
+      best = Math.min(best, Math.abs(lon - le) * kx, Math.abs(lon - lw) * kx);
+    }
+    if (C.river) {
+      // Rio Grande: güney sınırında kıvrımlı nehir
+      const rl = 25.957 + 0.006 * Math.sin((lon + 97.15) * 260) - 0.02 * Math.max(0, -(lon + 97.15)) * 4;
+      const dr = Math.abs(lat - rl) * ky;
+      if (dr < 55 && lon < cl) return { k: 2, d: 55 - dr };
+      best = Math.min(best, dr - 55);
+    }
+    return { k: 0, d: best, lat, lon };
+  }
   function siteColorFn(site) {
-    const s0 = SITES[site] || SITES.cape;
+    const s0 = SITES[site] || SITES.cape, C = COAST[site] || COAST.cape;
     return (e, z, s) => {
       const north = -z;
       // uzak bölge: gerçek doku
       let far = null;
-      if (s > 6000 && dayPixels) {
+      if (s > 25000 && dayPixels) {
         const d = s / RE, th = Math.atan2(e, north), la1 = s0.lat * D2R, lo1 = s0.lon * D2R;
         const la2 = Math.asin(Math.sin(la1) * Math.cos(d) + Math.cos(la1) * Math.sin(d) * Math.cos(th));
         const lo2 = lo1 + Math.atan2(Math.sin(th) * Math.sin(d) * Math.cos(la1), Math.cos(d) - Math.sin(la1) * Math.sin(la2));
         far = sampleDay(la2 / D2R, lo2 / D2R);
       }
-      const ce = coastE(north);
+      const sc = surfaceClass(site, e, north);
       const nz = vnoise(e / 900, north / 900, 3.3) * 0.6 + vnoise(e / 160, north / 160, 8.1) * 0.4;
       let c;
-      if (e > ce) { const dpt = clamp((e - ce) / 30000, 0, 1); c = [lerp(0.07, 0.02, dpt), lerp(0.25, 0.09, dpt), lerp(0.32, 0.2, dpt)]; }
-      else if (ce - e < 400) c = [0.42, 0.42, 0.3];
+      if (sc.k === 1) { const dpt = clamp(sc.d / 30000, 0, 1); const sh = clamp(sc.d / 900, 0, 1); c = [lerp(0.2, lerp(0.07, 0.02, dpt), sh), lerp(0.36, lerp(0.25, 0.09, dpt), sh), lerp(0.38, lerp(0.32, 0.2, dpt), sh)]; }
+      else if (sc.k === 2) { const sh = clamp(sc.d / 300, 0, 1); c = [lerp(0.14, 0.06, sh), lerp(0.26, 0.19, sh), lerp(0.24, 0.22, sh)]; }
       else {
-        const lag = vnoise(e / 4000 + 9, north / 4000, 1.7);
-        if (lag > 0.72 && e < ce - 1500) c = [0.08, 0.22, 0.26];
-        else c = site === 'starbase' ? [lerp(0.36, 0.5, nz), lerp(0.34, 0.44, nz), lerp(0.24, 0.3, nz)] : [lerp(0.16, 0.34, nz), lerp(0.24, 0.36, nz), lerp(0.1, 0.2, nz)];
+        c = [lerp(C.land[0], C.land2[0], nz), lerp(C.land[1], C.land2[1], nz), lerp(C.land[2], C.land2[2], nz)];
+        const sw = 1 - clamp((sc.d - 60) / 520, 0, 1);
+        if (sw > 0) c = [lerp(c[0], C.sand[0], sw), lerp(c[1], C.sand[1], sw), lerp(c[2], C.sand[2], sw)];
+        if (C.flats) { const fl = vnoise(e / 2500 + 4, north / 2500, 2.2); if (fl > 0.6) { const k = clamp((fl - 0.6) * 4, 0, 1); c = [lerp(c[0], C.flats[0], k), lerp(c[1], C.flats[1], k), lerp(c[2], C.flats[2], k)]; } }
+        else if (sc.d > 600 && vnoise(e / 3000, north / 3000, 6.6) > 0.7) c = [c[0] * 0.75, c[1] * 0.9, c[2] * 0.7];
       }
-      if (far) { const w = clamp((s - 12000) / 40000, 0, 1); c = [lerp(c[0], far[0], w), lerp(c[1], far[1], w), lerp(c[2], far[2], w)]; }
+      if (far) { const w = clamp((s - 30000) / 50000, 0, 1); c = [lerp(c[0], far[0], w), lerp(c[1], far[1], w), lerp(c[2], far[2], w)]; }
       return c;
     };
   }
@@ -323,11 +383,11 @@
   function rebuildSiteCap(site) {
     if (!siteCap) return;
     const old = siteCap.geometry;
-    siteCap.geometry = capGeometry(170000, 140, 190, siteColorFn(site));
+    siteCap.geometry = capGeometry(170000, 170, 260, siteColorFn(site));
     old.dispose();
   }
   function buildSites() {
-    siteCap = new T.Mesh(capGeometry(170000, 140, 190, siteColorFn('cape')), new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }));
+    siteCap = new T.Mesh(capGeometry(170000, 170, 260, siteColorFn('cape')), new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }));
     siteCap.receiveShadow = true; scene.add(siteCap);
     shipCap = new T.Mesh(capGeometry(90000, 80, 120, oceanColor), new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.15, normalMap: waveNormal, normalScale: new T.Vector2(0.4, 0.4) }));
     shipCap.visible = false; shipCap.receiveShadow = true; scene.add(shipCap);
@@ -592,6 +652,12 @@
         v.g.translateY(-1.6 * Math.min(1, s * 1.6));
         if (s < 0.7) v.g.translateX(Math.sin(time * 40) * 0.08 * (1 - s));
       }
+      if (c.tipped) {
+        v.tip = (v.tip || 0) + dtReal;
+        if (v.tipDir === undefined) v.tipDir = Math.random() < 0.5 ? -1 : 1;
+        v.g.rotateX(v.tipDir * Math.min(1.5, v.tip * v.tip * 0.35));
+        if (v.tip > 2.5 && v.tip < 2.6) { const p0 = surfacePoint(c.downrange(), 4); for (let i = 0; i < 40; i++) smokeP.spawn(p0[0] + rnd(-10, 10), p0[1], rnd(-10, 10), rnd(-5, 5), rnd(2, 8), rnd(-5, 5), rnd(2, 5), 5, 25, [0.9, 0.92, 0.95], [0.8, 0.82, 0.85], 0.6, 0, 0.5, 0); }
+      }
       if (c.splashed) {
         v.splash = (v.splash || 0) + dtReal;
         const s = v.splash;
@@ -693,6 +759,7 @@
           rnd(8, 22) * (0.5 + rr * 0.5), 5 * big, rnd(40, 75) * big * (1.3 - rr * 0.4), [shade, shade, shade * 1.02], [shade * 0.9, shade * 0.9, shade * 0.95], 0.55 * Math.min(1, rr * 2), 0, 0.9, 0);
       }
     }
+    jellyfish(c, v, thr, h, dt);
     // kalkış buharı
     if (h < 160 && c.type === 'stack') {
       const n = Math.ceil(dt * 60 * 4 * thr);
@@ -798,6 +865,7 @@
         w: [rnd(-4, 4), rnd(-4, 4), rnd(-4, 4)], life: 90, hot: reentry ? 1 : 0.6, rest: false, big,
       });
     }
+    scheduleBlasts(mid, ax, big, vx * keep, vy * keep, inAir, c.length, reentry);
     if (v) v.g.visible = false;
     shake = Math.max(shake, h < 2000 ? 1.4 : 0.6);
     audio.boom(h < 3000 ? 1 : 0.4, camDistTo(mid[0], mid[1], 0));
@@ -1245,7 +1313,8 @@
     if (hc < 40000 && mode !== 'hangar') {
       if (!scene.fog) scene.fog = new T.FogExp2(tmpC.clone(), 0);
       scene.fog.color.copy(tmpC);
-      scene.fog.density = 2.0e-5 * Math.exp(-hc / 7000);
+      const wx = wxState();
+      scene.fog.density = 2.0e-5 * Math.exp(-hc / 7000) * (wx && wx.fog ? 6 : wx && (wx.rain || wx.storm) ? 2.2 : 1);
     } else scene.fog = null;
     stars.position.copy(camera.position);
     stars.material.opacity = clamp(clamp((hc - 25000) / 40000, 0, 1) + (1 - day), 0, 1) * 0.95;
@@ -1347,6 +1416,11 @@
     log(`Kurtarma: ${S.MODE_NAMES[P0.mode]}${P0.cores.length ? ' · Booster ' + P0.cores.map(c => c.id).join(', ') : ''}`);
     if (P0.risks.length) for (const r of P0.risks) log('⚠ ' + r.text, 'bad');
     if (isTouch) $('touch').classList.remove('hidden');
+    bcData = []; bcLast = -1e9; blasts = []; pipTarget = null; holdShown = false; wxFlash = 0;
+    $('hold').classList.add('hidden'); $('manual-panel').classList.add('hidden');
+    if (w.storm || w.rain || w.fog) log(w.storm ? '⛈ Fırtına: alçak bulut tabanı, şimşek' : w.rain ? '🌧 Yağmurlu, alçak bulutlar' : '🌫 Sisli', '');
+    if (ctx.sandbox) log('🧪 Serbest mod — ekonomi etkilenmez');
+    window.TUT.show();
   }
 
   function log(text, cls) {
@@ -1373,18 +1447,18 @@
     const autoCam = P.state.opts.cinematic;
     switch (type) {
       case 'ignition': log('Motor ateşlemesi'); break;
-      case 'liftoff': log('KALKIŞ!', 'good'); banner('KALKIŞ', 'good'); if (autoCam) { cam.mode = 'ground'; cam.autoGround = true; } break;
-      case 'maxq': log('Max-Q — en yüksek aerodinamik yük (' + (d.q / 1000).toFixed(1) + ' kPa)'); banner('MAX-Q'); if (cam.mode === 'ground') cam.mode = 'chase'; break;
-      case 'meco': log('MECO — ana motorlar sustu'); banner('MECO'); break;
+      case 'liftoff': log('KALKIŞ!', 'good'); banner('KALKIŞ', 'good'); voice.say('Kalkış!', true); if (autoCam) { cam.mode = 'ground'; cam.autoGround = true; } if (ctxCur && ctxCur.padDamage) setTimeout(padDamageFX, 1200); break;
+      case 'maxq': log('Max-Q — en yüksek aerodinamik yük (' + (d.q / 1000).toFixed(1) + ' kPa)'); banner('MAX-Q'); voice.say('Maks Q'); if (cam.mode === 'ground') cam.mode = 'chase'; break;
+      case 'meco': log('MECO — ana motorlar sustu'); banner('MECO'); voice.say('Ana motorlar kapandı'); break;
       case 'hotstage': log('Sıcak kademe ayrılması — Ship motorları ateşlendi'); banner('SICAK AYRILMA'); break;
       case 'sideSep': log('Yan boosterlar ayrıldı (BECO)'); banner('YAN BOOSTER AYRILMASI'); puffs(c, 'side'); break;
-      case 'stageSep': log('Kademe ayrılması'); banner('KADEME AYRILMASI'); puffs(c, 'stage'); break;
+      case 'stageSep': log('Kademe ayrılması'); banner('KADEME AYRILMASI'); voice.say('Kademe ayrılması'); puffs(c, 'stage'); break;
       case 'ses': log('2. kademe ateşlemesi (SES-1)'); break;
       case 'fairing': log('Burun konisi ayrıldı'); banner('BURUN KONİSİ AYRILDI'); break;
       case 'chute': log(nm + ': paraşüt açıldı'); if (mission.fairingShipD === undefined) mission.fairingShipD = c.downrange() + 900; break;
       case 'fairingRec': log(nm + (d.ok ? ': ağlı gemiye indi ✓' : ': denize düştü (ıslak, kısmen kurtarıldı)'), d.ok ? 'good' : ''); break;
       case 'seco': log('SECO — Apoapsis ' + (isFinite(d.orbit.ap) ? (d.orbit.ap / 1000).toFixed(0) : '∞') + ' km, Periapsis ' + (d.orbit.pe / 1000).toFixed(0) + ' km', d.ok ? 'good' : 'bad'); break;
-      case 'orbit': banner(d.partial ? 'DÜŞÜK YÖRÜNGE' : 'YÖRÜNGEYE ULAŞILDI', d.partial ? 'bad' : 'good'); log('YÖRÜNGEDEYİZ!', 'good'); break;
+      case 'orbit': banner(d.partial ? 'DÜŞÜK YÖRÜNGE' : 'YÖRÜNGEYE ULAŞILDI', d.partial ? 'bad' : 'good'); log('YÖRÜNGEDEYİZ!', 'good'); voice.say(d.partial ? 'Düşük yörünge' : 'Yörüngeye ulaştık'); break;
       case 'deploy': {
         const txt = d.kind === 'starlink' ? d.n + ' uydu yörüngeye bırakıldı' : d.kind === 'dragon' ? 'Dragon ayrıldı — istasyona yöneliyor' : 'Yük ayrıldı';
         log(txt, 'good'); banner(txt.toUpperCase(), 'good'); deploySatsFX(c, d.kind); break;
@@ -1411,12 +1485,18 @@
         break;
       case 'landingBurn': log(nm + ': iniş yanışı' + (c.manualBurn ? ' (manuel)' : '')); if (autoCam && c.id === camFocusId && (c.rec.kind === 'rtls' || c.rec.kind === 'asds' || c.rec.kind === 'catch' || c.rec.kind === 'shipcatch')) cam.mode = 'ground'; break;
       case 'legs': log(nm + ': iniş bacakları açıldı'); break;
-      case 'landed': log(nm + ' İNDİ! (' + Math.abs(d.dx).toFixed(1) + ' m sapma)', 'good'); banner(nm.toUpperCase() + ' İNDİ!', 'good'); landFX(c); autoCamTimer = 7; break;
+      case 'landed': log(nm + ' İNDİ! (' + Math.abs(d.dx).toFixed(1) + ' m sapma)', 'good'); banner(nm.toUpperCase() + ' İNDİ!', 'good'); voice.say(c.manualLand ? 'Elle iniş başarılı!' : 'Booster indi!', true); landFX(c); autoCamTimer = 7; break;
       case 'splashdown': log(nm + ' okyanusa kontrollü indi — test başarılı (booster devrilip batıyor)', 'good'); banner('OKYANUS İNİŞ TESTİ BAŞARILI', 'good'); autoCamTimer = 8; break;
-      case 'caught': log(nm + (d.ship ? ' YÖRÜNGEDEN DÖNÜP YAKALANDI!' : ' KULE TARAFINDAN YAKALANDI!'), 'good'); banner('YAKALANDI!', 'good'); autoCamTimer = 8; landFX(c); break;
-      case 'explode': explodeFX(c, d.why, d.reentry); if (c.id === camFocusId) autoCamTimer = 6; break;
+      case 'caught': log(nm + (d.ship ? ' YÖRÜNGEDEN DÖNÜP YAKALANDI!' : ' KULE TARAFINDAN YAKALANDI!'), 'good'); banner('YAKALANDI!', 'good'); voice.say('Yakalandı!', true); autoCamTimer = 8; landFX(c); break;
+      case 'explode': explodeFX(c, d.why, d.reentry); if (c.id === camFocusId) { autoCamTimer = 6; voice.say('Araç kaybedildi', true); } break;
+      case 'manualTakeover': log(nm + ': ELLE KONTROL — W/S gaz, A/D yönelim', 'good'); banner('ELLE İNİŞ: KONTROL SENDE', 'good'); voice.say('Elle kontrol'); setFocus(c); m.camLock = true; warp = 1; break;
+      case 'tipover': banner(nm.toUpperCase() + ' DEVRİLDİ', 'bad'); voice.say('Booster devrildi', true); shake = Math.max(shake, 0.5); break;
+      case 'upperDeorbit': log('Üst kademe: yörüngeden çıkış yanışı (uzay çöpü bırakmıyoruz)'); break;
+      case 'upperDeorbitEnd': log('Üst kademe atmosfere girip okyanus üzerinde yanacak', 'good'); break;
       case 'msg': log(d.text, d.bad ? 'bad' : ''); if (d.bad) banner(d.text.length > 48 ? d.text.slice(0, 46) + '…' : d.text, 'bad'); break;
-      case 'end': clearTimeout(endTimer); endTimer = setTimeout(() => finishMission(d), d.ok ? (d.kind === 'dragon' ? 36000 : 3500) : 7000); if (d.ok && d.kind === 'dragon') { setFocus(mission.stack); cam.tdist = 260; cam.mode = 'chase'; } break;
+      case 'end': clearTimeout(endTimer);
+        if (d.ok && (d.kind === 'moon' || d.kind === 'mars')) { endTimer = setTimeout(() => startPlanet(d.kind, d), 4000); banner(d.kind === 'moon' ? 'AY TRANSFER YANIŞI' : 'MARS TRANSFER YANIŞI', 'good'); log('Yakıt deposundan ikmal yapıldı — transfer yörüngesi', 'good'); break; }
+        endTimer = setTimeout(() => finishMission(d), d.ok ? (d.kind === 'dragon' ? 36000 : 3500) : 7000); if (d.ok && d.kind === 'dragon') { setFocus(mission.stack); cam.tdist = 260; cam.mode = 'chase'; } break;
     }
   }
   function puffs(c, kind) {
@@ -1435,6 +1515,18 @@
       const y = rnd(0.5, 0.95) * c.length;
       smokeP.spawn(e[0] + ax[0] * y, e[1] + ax[1] * y, rnd(-1, 1) * big, rnd(-4, 4), rnd(-4, 4), rnd(-4, 4), rnd(2, 5), 1.5 * big, 10 * big, [1, 1, 1], [0.9, 0.9, 0.92], 0.35, 0, 0.6, -0.8);
     }
+  }
+  function padDamageFX() {
+    const p0 = surfacePoint(0, 2), up = [Math.cos(p0[2]), Math.sin(p0[2])], east = [up[1], -up[0]];
+    log('Rampa hasarı: OLM altındaki beton parçalandı!', 'bad'); banner('RAMPA HASAR GÖRDÜ', 'bad');
+    for (let i = 0; i < 28; i++) {
+      const s0 = rnd(0.4, 2.2);
+      const mesh = new T.Mesh(new T.DodecahedronGeometry(s0, 0), new T.MeshStandardMaterial({ color: 0x8a8781, roughness: 1, flatShading: true }));
+      mesh.material.emissive = new T.Color(0, 0, 0); scene.add(mesh);
+      const th = Math.random() * Math.PI * 2, sp = rnd(20, 70), upv = rnd(15, 60);
+      debris.push({ mesh, p: [p0[0] + rnd(-8, 8) * east[0], p0[1] + rnd(-8, 8) * east[1], rnd(-8, 8)], v: [east[0] * Math.cos(th) * sp + up[0] * upv, east[1] * Math.cos(th) * sp + up[1] * upv, Math.sin(th) * sp], w: [rnd(-6, 6), rnd(-6, 6), rnd(-6, 6)], life: 60, hot: 0, rest: false, big: 0.8 });
+    }
+    for (let i = 0; i < 80; i++) { const th = Math.random() * Math.PI * 2, sp = rnd(10, 50); smokeP.spawn(p0[0], p0[1], 0, east[0] * Math.cos(th) * sp + up[0] * rnd(5, 25), east[1] * Math.cos(th) * sp + up[1] * rnd(5, 25), Math.sin(th) * sp, rnd(6, 14), 10, 60, [0.6, 0.56, 0.5], [0.5, 0.48, 0.45], 0.7, 0, 0.4, 0); }
   }
   function engineOutFX(c) {
     const v = vis.get(c.id); if (!v || !v.ef) return;
@@ -1459,6 +1551,12 @@
     }
   }
   function keyAction(code) {
+    if (mode === 'planet' && PL.st) {
+      if (code === 'Space' && !PL.st.done) { PL.st.auto = !PL.st.auto; banner(PL.st.auto ? 'OTOMATİK İNİŞ' : 'ELLE KONTROL'); }
+      if (code === 'KeyO') setPaused(!paused);
+      if (code === 'Comma') warp = Math.max(1, warp / 2); if (code === 'Period') warp = Math.min(4, warp * 2);
+      return;
+    }
     if (mode !== 'flight' || !mission) return;
     const m = mission;
     switch (code) {
@@ -1474,6 +1572,7 @@
       case 'KeyB': cycleFocus(-1); break;
       case 'KeyN': { const i = (CAM_MODES.indexOf(cam.mode) + 1) % CAM_MODES.length; cam.mode = CAM_MODES[i]; banner(CAM_NAMES[cam.mode]); break; }
       case 'KeyM': cam.map = !cam.map; break;
+      case 'KeyI': pipOn = !pipOn; banner(pipOn ? 'BÖLÜNMÜŞ EKRAN AÇIK' : 'BÖLÜNMÜŞ EKRAN KAPALI'); break;
       case 'KeyH': $('keys').classList.toggle('hidden'); break;
       case 'KeyO': setPaused(!paused); break;
       case 'KeyU': setMuted(!P.state.opts.muted); break;
@@ -1484,7 +1583,7 @@
   }
   addEventListener('keydown', e => {
     if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
-    if (e.code === 'Space' && mode === 'flight') e.preventDefault();
+    if (e.code === 'Space' && (mode === 'flight' || mode === 'planet')) e.preventDefault();
     if (!keys[e.code]) keyAction(e.code);
     keys[e.code] = true;
   });
@@ -1560,10 +1659,13 @@
     for (const d of debris) scene.remove(d.mesh); debris = [];
     for (const s of sats3d) s.g.parent && s.g.parent.remove(s.g); sats3d = [];
     mission = null; ctxCur = null; mode = 'hangar'; cam.map = false; warp = 1; cam.mode = 'chase';
+    voice.stop(); blasts = []; cloudDeck.visible = false;
+    for (const id of ['bcast', 'manual-panel', 'pip-frame', 'pip-label', 'hold', 'planet']) $(id).classList.add('hidden');
     fireP.clear(); smokeP.clear(); audio.set(0); engineLight.intensity = 0;
     setSite(P.state.sel.rocket === 'ss' ? 'starbase' : 'cape'); sunHour = 11; sunWeek = P.state.week;
     rebuildConstData(); rebuildNetLayer();
     H.render();
+    window.TUT.show();
   }
   $('btn-back').onclick = backToHangar;
   $('h-pause').onclick = () => setPaused(!paused);
@@ -1577,6 +1679,7 @@
     hudT -= dtReal;
     const c = focusCraft();
     updateLandPanel(c);
+    updateManualPanel(c);
     if (hudT > 0) return;
     hudT = 0.1;
     $('h-clock').textContent = fmtT(m.t);
@@ -1668,6 +1771,520 @@
 
 
 
+  /* ================= HAVA GÖRSELLERİ ================= */
+  const cloudDeck = (() => {
+    const geo = new T.PlaneGeometry(160000, 160000, 1, 1); geo.rotateX(-Math.PI / 2);
+    const mat = new T.ShaderMaterial({
+      uniforms: { cover: { value: 0.3 }, light: { value: 1 }, dark: { value: 0 }, sun: { value: new T.Vector3(0, 1, 0) }, off: { value: new T.Vector2() } },
+      vertexShader: `#include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying vec2 vP; varying vec2 vL; uniform vec2 off;
+        void main(){ vP = position.xz + off; vL = position.xz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: `#include <common>
+        #include <logdepthbuf_pars_fragment>
+        varying vec2 vP; varying vec2 vL; uniform float cover, light, dark;
+        float hh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float nn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+          return mix(mix(hh(i), hh(i+vec2(1.0,0.0)), f.x), mix(hh(i+vec2(0.0,1.0)), hh(i+vec2(1.0,1.0)), f.x), f.y); }
+        float fb(vec2 p){ float a = 0.0, w = 0.5; for (int k = 0; k < 6; k++) { a += w * nn(p); p = p * 2.03 + 17.1; w *= 0.5; } return a; }
+        void main(){
+          vec2 p = vP / 2600.0;
+          float n = fb(p);
+          float a = smoothstep(1.0 - cover - 0.08, 1.0 - cover + 0.18, n);
+          float edge = 1.0 - smoothstep(55000.0, 80000.0, length(vL));
+          float sh = 0.72 + 0.4 * fb(p * 2.3 + 5.0);
+          vec3 c = mix(vec3(0.85, 0.87, 0.9), vec3(0.32, 0.34, 0.38), dark) * sh * light;
+          gl_FragColor = vec4(c, a * 0.92 * edge);
+          #include <logdepthbuf_fragment>
+        }`,
+      transparent: true, depthWrite: false, side: T.DoubleSide,
+    });
+    const m = new T.Mesh(geo, mat); m.renderOrder = 4; m.visible = false; m.frustumCulled = false;
+    scene.add(m);
+    return m;
+  })();
+  const wxCanvas = document.createElement('canvas'); $('wx-fx').appendChild(wxCanvas);
+  const wxCtx = wxCanvas.getContext('2d');
+  let wxFlash = 0, wxNextBolt = 5;
+  function wxState() { return ctxCur && ctxCur.weather ? ctxCur.weather : null; }
+  function cloudBase(w) { return w.storm ? 900 : w.rain ? 1200 : 1800; }
+  function updateWeatherFX(dtReal, sky) {
+    const w = wxState();
+    const inFlight = mode === 'flight' && !cam.map && w;
+    const W = innerWidth, H = innerHeight;
+    if (wxCanvas.width !== W || wxCanvas.height !== H) { wxCanvas.width = W; wxCanvas.height = H; }
+    wxCtx.clearRect(0, 0, W, H);
+    if (!inFlight) { cloudDeck.visible = false; return; }
+    const base = cloudBase(w), cover = clamp(w.cloud / 100, 0, 1) * (w.storm ? 1.1 : 1);
+    cloudDeck.visible = cover > 0.12 && sky.hc < 120000;
+    placeSurface(cloudDeck, 0, base);
+    const u = cloudDeck.material.uniforms;
+    u.cover.value = cover * 0.85; u.light.value = 0.1 + 0.95 * sky.day + wxFlash * 2; u.dark.value = w.storm ? 0.8 : w.rain ? 0.5 : 0.1;
+    u.off.value.x += dtReal * (w.wind || 3) * 0.6;
+    const hc = sky.hc;
+    // buluttan geçiş
+    const thick = 350;
+    const inCloud = cover > 0.25 ? clamp(1 - Math.abs(hc - base) / thick, 0, 1) * cover : 0;
+    if (inCloud > 0.02) { const k = 0.25 + 0.75 * sky.day; wxCtx.fillStyle = `rgba(${200 * k | 0},${205 * k | 0},${212 * k | 0},${Math.min(0.92, inCloud * 1.1)})`; wxCtx.fillRect(0, 0, W, H); }
+    // yağmur (bulut tabanının altında)
+    if ((w.rain || w.storm) && hc < base) {
+      const n = w.storm ? 420 : 220, fall = w.storm ? 1.6 : 1.1;
+      wxCtx.strokeStyle = `rgba(190,205,225,${0.18 + 0.2 * sky.day})`; wxCtx.lineWidth = 1;
+      wxCtx.beginPath();
+      const t = performance.now() / 1000;
+      for (let i = 0; i < n; i++) {
+        const sx = (hash3(i, 7, 1) * W + t * 60 * (w.wind || 3) * 0.1) % W, sp = 900 + hash3(i, 3, 2) * 700;
+        const sy = ((hash3(i, 5, 9) * H) + t * sp * fall) % H;
+        wxCtx.moveTo(sx, sy); wxCtx.lineTo(sx - 4 - (w.wind || 3) * 0.6, sy + 18 + hash3(i, 1, 1) * 14);
+      }
+      wxCtx.stroke();
+    }
+    // sis
+    if (w.fog && hc < 2500) { const k = 0.3 + 0.7 * sky.day; wxCtx.fillStyle = `rgba(${170 * k | 0},${178 * k | 0},${186 * k | 0},${0.55 * (1 - hc / 2500)})`; wxCtx.fillRect(0, 0, W, H); }
+    // şimşek
+    if (w.storm) {
+      wxNextBolt -= dtReal;
+      if (wxNextBolt <= 0) { wxFlash = 1; wxNextBolt = rnd(3, 11); setTimeout(() => audio.boom(0.25, rnd(3000, 9000)), rnd(800, 3000)); }
+    }
+    if (wxFlash > 0) { wxCtx.fillStyle = `rgba(220,230,255,${wxFlash * 0.35})`; wxCtx.fillRect(0, 0, W, H); hemi.intensity += wxFlash * 2; wxFlash = Math.max(0, wxFlash - dtReal * 4); }
+  }
+
+  /* ================= SIRALI PATLAMA ================= */
+  let blasts = [];
+  function scheduleBlasts(mid, ax, big, vx, vy, inAir, len, reentry) {
+    if (reentry) return;
+    const n = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < n; i++) blasts.push({ at: time + 0.35 + i * rnd(0.25, 0.6), p: [mid[0] + ax[0] * rnd(-0.5, 0.5) * len, mid[1] + ax[1] * rnd(-0.5, 0.5) * len], big: big * rnd(0.6, 1.1), v: [vx, vy], inAir });
+    if (inAir) blasts.push({ at: time + 0.15, p: mid.slice(), big, v: [vx, vy], inAir, fireball: true });
+  }
+  function updateBlasts() {
+    for (let i = blasts.length - 1; i >= 0; i--) {
+      const b = blasts[i]; if (time < b.at) continue;
+      blasts.splice(i, 1);
+      const big = b.big, p = b.p;
+      if (b.fireball) {
+        // yanan yakıt bulutu: yavaş yükselen turuncu küre, sonra koyu duman
+        const r0 = Math.hypot(p[0], p[1]), up = [p[0] / r0, p[1] / r0];
+        for (let k = 0; k < 140; k++) {
+          const th = Math.random() * Math.PI * 2, ph = Math.acos(rnd(-1, 1)), sp = rnd(4, 22) * big;
+          fireP.spawn(p[0], p[1], 0, b.v[0] * 0.3 + Math.sin(ph) * Math.cos(th) * sp, b.v[1] * 0.3 + Math.sin(ph) * Math.sin(th) * sp, Math.cos(ph) * sp,
+            rnd(2.5, 5.5), rnd(14, 26) * big, rnd(60, 110) * big, [1, 0.75, 0.35], [0.55, 0.12, 0.02], 0.85, 0, 0.7, -6);
+        }
+        for (let k = 0; k < 90; k++) {
+          const sh = rnd(0.06, 0.16);
+          smokeP.spawn(p[0] + up[0] * rnd(0, 40) * big, p[1] + up[1] * rnd(0, 40) * big, rnd(-20, 20) * big, up[0] * rnd(8, 25) + rnd(-6, 6), up[1] * rnd(8, 25) + rnd(-6, 6), rnd(-6, 6),
+            rnd(20, 45), rnd(30, 50) * big, rnd(140, 260) * big, [sh, sh, sh], [0.3, 0.29, 0.28], 0.8, 0, 0.25, -3);
+        }
+        continue;
+      }
+      for (let k = 0; k < 60; k++) {
+        const th = Math.random() * Math.PI * 2, ph = Math.acos(rnd(-1, 1)), sp = rnd(15, 60) * big;
+        fireP.spawn(p[0], p[1], 0, b.v[0] + Math.sin(ph) * Math.cos(th) * sp, b.v[1] + Math.sin(ph) * Math.sin(th) * sp, Math.cos(ph) * sp,
+          rnd(0.5, 1.6), rnd(5, 10) * big, rnd(20, 40) * big, [1, 0.92, 0.7], [0.9, 0.2, 0.03], 1, 0, 1.8, 0);
+      }
+      flashLight.userData = { e: p, t: 0.6, max: 40 * big };
+      shake = Math.max(shake, 0.5);
+      audio.boom(0.45, camDistTo(p[0], p[1], 0));
+    }
+  }
+
+  /* ================= ALACAKARANLIK "DENİZANASI" ================= */
+  function sunlitAt(px, py, pz) {
+    const r = Math.hypot(px, py, pz), h = Math.max(0, r - RE);
+    const el = (px * SUN.x + py * SUN.y + pz * SUN.z) / r;
+    return el > -Math.sin(Math.acos(RE / (RE + h)));
+  }
+  function jellyfish(c, v, thr, h, dt) {
+    if (h < 25000 || h > 220000 || !v.ef) return;
+    const e = v.ef;
+    const gr = Math.hypot(e[0], e[1]);
+    const groundEl = (e[0] / gr * SUN.x + e[1] / gr * SUN.y);
+    if (groundEl > 0.03 || groundEl < -0.32) return;
+    if (!sunlitAt(e[0], e[1], 0)) return;
+    if (Math.random() > dt * 8 * thr) return;
+    const ax = axisOf(v), big = mission.key === 'ss' ? 2 : 1;
+    const sp = rnd(150, 450);
+    fireP.spawn(e[0] - ax[0] * 30, e[1] - ax[1] * 30, rnd(-10, 10), -ax[0] * sp + rnd(-60, 60), -ax[1] * sp + rnd(-60, 60), rnd(-80, 80),
+      rnd(25, 45), 200 * big, rnd(1800, 3200) * big, [0.55, 0.75, 1.0], [0.75, 0.55, 0.9], 0.035, 0, 0.12, 0);
+  }
+
+  /* ================= SESLİ ANONS ================= */
+  const voice = (() => {
+    const ok = typeof window.speechSynthesis !== 'undefined';
+    let v = null, lastCount = null;
+    function pick() { if (!ok || v) return; const vs = speechSynthesis.getVoices(); v = vs.find(x => /^tr/i.test(x.lang)) || null; }
+    if (ok) { pick(); speechSynthesis.onvoiceschanged = pick; }
+    function enabled() { return ok && P.state.opts.voice !== false && !P.state.opts.muted && mode === 'flight'; }
+    function say(text, urgent) {
+      if (!enabled()) return;
+      try {
+        if (urgent) speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text); u.lang = 'tr-TR'; if (v) u.voice = v; u.rate = 1.05; u.pitch = 0.95; u.volume = 0.9;
+        speechSynthesis.speak(u);
+      } catch (e) { /* yok say */ }
+    }
+    const NUM = ['sıfır', 'bir', 'iki', 'üç', 'dört', 'beş', 'altı', 'yedi', 'sekiz', 'dokuz', 'on'];
+    function countdown(t) {
+      if (t >= 0 || t < -10.5) { lastCount = null; return; }
+      const n = Math.ceil(-t);
+      if (n !== lastCount && n <= 10 && n >= 1) { lastCount = n; say(n === 10 ? 'T eksi on' : NUM[n], true); }
+    }
+    function stop() { if (ok) try { speechSynthesis.cancel(); } catch (e) { /* */ } }
+    return { say, countdown, stop };
+  })();
+
+  /* ================= CANLI YAYIN ŞERİDİ ================= */
+  let bcData = [], bcLast = -1e9;
+  const bcCv = $('bc-chart'), bcG = bcCv.getContext('2d');
+  function updateBroadcast() {
+    const el = $('bcast');
+    const on = mode === 'flight' && mission && P.state.opts.broadcast !== false && !cam.map;
+    el.classList.toggle('hidden', !on);
+    if (!on) return;
+    const m = mission, s = m.stack && m.stack.alive ? m.stack : m.crafts.find(c => c.alive && (c.type === 'upper' || c.type === 'stack')) || focusCraft();
+    if (!s) return;
+    if (m.t - bcLast >= 1 && m.t > -1) { bcLast = m.t; bcData.push([m.t, s.airSpeed(), Math.max(0, s.alt())]); if (bcData.length > 900) bcData.shift(); }
+    const W = bcCv.width, H = bcCv.height;
+    bcG.clearRect(0, 0, W, H);
+    if (bcData.length > 1) {
+      const mv = Math.max(500, ...bcData.map(d => d[1])), mh = Math.max(5000, ...bcData.map(d => d[2]));
+      const draw = (k, mx, col) => { bcG.strokeStyle = col; bcG.lineWidth = 2; bcG.beginPath(); bcData.forEach((d, i) => { const x = i / (bcData.length - 1) * (W - 4) + 2, y = H - 4 - d[k] / mx * (H - 10); i ? bcG.lineTo(x, y) : bcG.moveTo(x, y); }); bcG.stroke(); };
+      draw(2, mh, '#ffd36b'); draw(1, mv, '#4fc3ff');
+      bcG.fillStyle = 'rgba(200,220,255,0.7)'; bcG.font = '10px sans-serif'; bcG.fillText('hız', 4, 10); bcG.fillStyle = '#ffd36b'; bcG.fillText('irtifa', 28, 10);
+    }
+    const b = m.crafts.find(c => c.rec && !c.ship && c.type !== 'fairing');
+    const bs = b ? (b.landed ? 'indi ✓' : b.caught ? 'yakalandı ✓' : b.splashed ? 'okyanusta' : !b.alive ? 'kayıp' : STATES[b.state] || '') : '';
+    const html = `<span>${PHASES[m.phase] || m.phase}</span><span>HIZ <b>${(s.airSpeed() * 3.6).toFixed(0)}</b> km/sa</span><span>İRTİFA <b>${(Math.max(0, s.alt()) / 1000).toFixed(1)}</b> km</span>${b ? `<span>BOOSTER <b>${bs}</b></span>` : ''}`;
+    const tx = $('bc-text'); if (tx._h !== html) { tx.innerHTML = html; tx._h = html; }
+  }
+
+  /* ================= BÖLÜNMÜŞ EKRAN (PiP) ================= */
+  const pipCam = new T.PerspectiveCamera(45, 1.6, 0.3, 5e9);
+  let pipOn = true, pipTarget = null;
+  function choosePip() {
+    const m = mission; if (!m || cam.map || !pipOn || QUAL === QUALITY.low) return null;
+    const f = focusCraft();
+    const live = c => c && c.alive && c.type !== 'fairing';
+    const boosters = m.crafts.filter(c => c.rec && c.id !== camFocusId && c.alive && !c.landed && !c.caught && !c.splashed && c.type !== 'fairing');
+    if (f && (f.type === 'stack' || f.type === 'upper' || f.ship) && boosters.length) return boosters[0];
+    if (f && f.rec) {
+      const up = m.crafts.find(c => (c.type === 'upper' || (c.ship && c.state !== 'final')) && c.id !== camFocusId && live(c));
+      if (up && up.alt() > 1000) return up;
+      const other = boosters.find(c => c.id !== f.id);
+      if (other) return other;
+    }
+    return null;
+  }
+  function pipRect() { const w = Math.round(Math.min(340, innerWidth * 0.26)), h = Math.round(w * 0.6); return { x: innerWidth - w - 260, y: 130, w, h }; }
+  function renderPip() {
+    const c = choosePip();
+    const fr = $('pip-frame'), lb = $('pip-label');
+    if (!c || innerWidth < 900) { fr.classList.add('hidden'); lb.classList.add('hidden'); pipTarget = null; return; }
+    const v = vis.get(c.id); if (!v || !v.ef) return;
+    pipTarget = c;
+    const R0 = pipRect();
+    const e = v.ef, ax = axisOf(v), L = c.length || 30;
+    const cx = e[0] + ax[0] * L * 0.45 - F.x, cy = e[1] + ax[1] * L * 0.45 - F.y;
+    const r = Math.hypot(e[0], e[1]), up = [e[0] / r, e[1] / r], east = [up[1], -up[0]];
+    const d = L * 3.2, yaw = 0.7, pit = 0.12;
+    pipCam.position.set(cx + (east[0] * Math.sin(yaw) + up[0] * pit) * d, cy + (east[1] * Math.sin(yaw) + up[1] * pit) * d, Math.cos(yaw) * d - F.z);
+    pipCam.up.set(up[0], up[1], 0);
+    pipCam.lookAt(cx, cy, -F.z);
+    pipCam.aspect = R0.w / R0.h; pipCam.updateProjectionMatrix();
+    const low = c.alt() < 45000;
+    const capVis = siteCap.visible, shVis = shipCap.visible, fog = scene.fog;
+    if (low) { siteCap.visible = true; if (mission.shipD !== undefined) shipCap.visible = true; }
+    scene.fog = null;
+    const yb = innerHeight - R0.y - R0.h;
+    renderer.setScissorTest(true);
+    renderer.setScissor(R0.x, R0.y, R0.w, R0.h); renderer.setViewport(R0.x, R0.y, R0.w, R0.h);
+    const ac = renderer.autoClear; renderer.autoClear = false; renderer.clear(true, true, false);
+    renderer.render(scene, pipCam);
+    renderer.autoClear = ac;
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
+    siteCap.visible = capVis; shipCap.visible = shVis; scene.fog = fog;
+    fr.classList.remove('hidden'); lb.classList.remove('hidden');
+    Object.assign(fr.style, { left: R0.x + 'px', top: yb + 'px', width: R0.w + 'px', height: R0.h + 'px', right: 'auto', bottom: 'auto' });
+    Object.assign(lb.style, { left: (R0.x + 6) + 'px', top: (yb + 6) + 'px' });
+    const txt = `${c.name} · ${(Math.max(0, c.alt()) / 1000).toFixed(1)} km · ${c.speed().toFixed(0)} m/s`;
+    if (lb.textContent !== txt) lb.textContent = txt;
+  }
+
+  /* ================= HANGAR 3D ÖNİZLEME ================= */
+  const pvScene = new T.Scene();
+  pvScene.environment = envDay;
+  const pvCam = new T.PerspectiveCamera(30, 0.6, 0.5, 4000);
+  const pvSun = new T.DirectionalLight(0xfff2e0, 2.6); pvSun.position.set(60, 120, 90); pvScene.add(pvSun);
+  pvScene.add(new T.HemisphereLight(0x9cc4ff, 0x222018, 0.7));
+  let pvWant = null, pvKey = null, pvGroup = null, pvParts = [], pvT = 0, pvH = 70;
+  function buildPreview(key) {
+    if (pvGroup) pvScene.remove(pvGroup);
+    pvGroup = new T.Group(); pvParts = [];
+    const d = S.ROCKETS[key]; if (!d) return;
+    const st = d.stages;
+    const add = (o, x, y, from) => { pvGroup.add(o); o.position.set(x, y, 0); pvParts.push({ o, x, y, from }); };
+    let y = 0;
+    if (key === 'ss') {
+      const b = MD.superHeavy(st[0], {}); add(b.g, 0, 0, [0, -40]); y = b.len || st[0].len;
+      const sh = MD.ship(st[1], {}); add(sh.g, 0, y, [0, 60]); y += st[1].len;
+    } else {
+      const b = MD.falconBooster(st[0], { fins: key !== 'f1', legs: key !== 'f1' }); add(b.g, 0, 0, [0, -40]); y = st[0].len;
+      if (key === 'fh') for (const sd of [-1, 1]) { const sb = MD.falconBooster(d.sides, { nose: true, side: true, fins: true, legs: true, sideAttach: sd }); add(sb.g, sd * (d.sides.dia + 0.45), 0, [sd * 30, 0]); }
+      const u = MD.falconUpper(st[1], key === 'f1'); add(u.g, 0, y, [0, 40]); y += st[1].len;
+      const halves = MD.fairingHalves(key === 'f1' ? 0.75 : 2.6, d.payloadLen);
+      halves.forEach((h, i) => add(h, 0, y, [i ? -18 : 18, 30]));
+      y += d.payloadLen;
+    }
+    pvH = y;
+    // rampa zemini
+    const pad = new T.Mesh(new T.CylinderGeometry(pvH * 0.35, pvH * 0.38, 1, 48), new T.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.9 }));
+    pad.position.y = -0.5; pvGroup.add(pad);
+    pvScene.add(pvGroup);
+    pvT = 0;
+  }
+  function renderPreview(dtReal) {
+    const el = $('preview');
+    if (mode !== 'hangar' || el.classList.contains('hidden')) return;
+    const key = pvWant || P.state.sel.rocket;
+    if (key !== pvKey) { pvKey = key; buildPreview(key); $('pv-label').textContent = (P.ROCKET_INFO[key] || {}).name || ''; }
+    const rc = el.getBoundingClientRect();
+    if (rc.width < 80 || rc.height < 120) return;
+    pvT = Math.min(1, pvT + dtReal * 0.6);
+    for (const p of pvParts) {
+      const k = 1 - Math.pow(1 - clamp((pvT - (p.y / pvH) * 0.4) / 0.6, 0, 1), 3);
+      p.o.position.set(p.x + p.from[0] * (1 - k), p.y + p.from[1] * (1 - k), 0);
+    }
+    pvGroup.rotation.y += dtReal * 0.35;
+    pvCam.aspect = rc.width / rc.height;
+    const fitH = pvH * 1.25, fitW = pvH * 0.6;
+    const dist = Math.max(fitH / (2 * Math.tan(pvCam.fov * D2R / 2)), fitW / (2 * Math.tan(pvCam.fov * D2R / 2)) / pvCam.aspect);
+    pvCam.position.set(0, pvH * 0.55, dist); pvCam.lookAt(0, pvH * 0.5, 0); pvCam.updateProjectionMatrix();
+    const x = rc.left, yb = innerHeight - rc.bottom;
+    renderer.setScissorTest(true);
+    renderer.setScissor(x, yb, rc.width, rc.height); renderer.setViewport(x, yb, rc.width, rc.height);
+    const ac = renderer.autoClear; renderer.autoClear = false; renderer.clear(false, true, false);
+    const bg = pvScene.background; pvScene.background = null;
+    renderer.render(pvScene, pvCam);
+    pvScene.background = bg; renderer.autoClear = ac;
+    renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
+  }
+
+  /* ================= GERİ SAYIM BEKLEMESİ ================= */
+  let holdShown = false;
+  function checkHold() {
+    const m = mission, h = ctxCur && ctxCur.hold;
+    if (!m || !h || h.done || m.t < h.t || m.holding) return;
+    m.holding = true; holdShown = true;
+    $('hold-text').innerHTML = `<b>${h.sensor}</b> beklenmedik değer okudu (T${m.t.toFixed(0)} s).<br>Uçuş direktörü karar bekliyor: iptal edersen fırlatma masrafının %85'i geri alınır ve booster hazıra döner. Devam edersen arıza riski yaklaşık <b>%${Math.round(h.risk * 100)}</b>.`;
+    $('hold').classList.remove('hidden');
+    banner('GERİ SAYIM DURDURULDU', 'bad'); log('HOLD — ' + h.sensor, 'bad'); voice.say('Bekleme. Geri sayım durduruldu.', true);
+    warp = 1;
+  }
+  $('hold-abort').onclick = () => {
+    const h = ctxCur.hold; h.done = true; $('hold').classList.add('hidden');
+    const sb = ctxCur.sandbox;
+    const refund = sb ? 0 : P.abortLaunch(ctxCur);
+    clearTimeout(endTimer); voice.stop();
+    if (mission) mission.result = mission.result || { ok: false, aborted: true };
+    backToHangar();
+    if (!sb) setTimeout(() => alert(`Fırlatma iptal edildi. ${H.money(refund)} iade edildi.`), 50);
+  };
+  $('hold-go').onclick = () => {
+    const h = ctxCur.hold; h.done = true; $('hold').classList.add('hidden');
+    mission.holding = false;
+    if (Math.random() < h.risk && !mission.engineFail) { mission.engineFail = { t: rnd(12, 80), part: 'booster', count: 1 }; }
+    log('Uçuş direktörü: devam kararı — geri sayım sürüyor'); voice.say('Devam kararı. Geri sayım sürüyor.');
+  };
+
+  /* ================= ELLE İNİŞ PANELİ ================= */
+  function updateManualPanel(c) {
+    const p = $('manual-panel');
+    const on = c && c.manualLand && c.alive && !c.landed && !c.caught && !c.splashed;
+    p.classList.toggle('hidden', !on);
+    if (!on) return;
+    $('land-panel').classList.add('hidden');
+    const a = c.airVel ? c.airVel() : [0, 0];
+    const h = c.alt() - (c.rec.kind === 'asds' ? 3 : c.rec.kind === 'catch' ? 40 : 0);
+    $('mp-alt').textContent = h.toFixed(0) + ' m';
+    const vz = c.vUp(); const vzEl = $('mp-vz'); vzEl.textContent = vz.toFixed(1) + ' m/s'; vzEl.style.color = h < 300 && vz < -Math.max(3, h * 0.12) ? 'var(--bad)' : '';
+    const as = c.airSpeed(), vx = Math.sqrt(Math.max(0, as * as - vz * vz)); void a;
+    $('mp-vx').textContent = Math.abs(vx).toFixed(1) + ' m/s';
+    $('mp-dx').textContent = (c.downrange() - c.rec.target).toFixed(0) + ' m';
+    $('mp-thr').style.width = ((c.manThr || 0) * 100) + '%';
+  }
+
+  /* ================= ETKİLEŞİMLİ EĞİTİM ================= */
+  window.TUT = (() => {
+    const STEPS = [
+      { sel: '[data-tab=contracts]', text: '👋 Hoş geldin! Şirketin Falcon 1 ile başlıyor. İlk gelir için <b>Sözleşmeler</b> sekmesini aç.', when: t => t === 'contracts' },
+      { sel: '[data-acc]', text: 'Bir sözleşmeyi <b>Kabul et</b>: ödülün %30\'u hemen avans olarak gelir.', ev: 'accept' },
+      { sel: '[data-tab=launch]', text: 'Şimdi <b>Fırlatma</b> sekmesine dön.', when: t => t === 'launch' },
+      { sel: '#b-launch', text: 'Yük olarak <b>Sözleşme yükü</b>nü seç, hava durumuna bak ve <b>FIRLAT</b>.', ev: 'launch' },
+      { sel: '.hud-right', text: 'Uçuştasın! Sol panel telemetri, sağda kameralar ve zaman hızı. <kbd>.</kbd> ile zamanı hızlandır, <kbd>V</kbd> ile araç değiştir, <kbd>N</kbd> ile sinematik açı. Uçuş bitince sonuç ekranı gelir.', next: true, flight: true },
+      { sel: '#btn-week', text: 'Her hafta bir kez fırlatabilirsin. <b>Haftayı bitir</b> ile zaman ilerler: fabrikalar üretir, Ar-Ge ilerler, aboneler öder. Falcon 1 ile 2 başarılı uçuştan sonra <b>Ar-Ge</b>\'de iniş teknolojileri açılır. İyi şanslar!', next: true },
+    ];
+    const box = $('tut');
+    let hl = null;
+    function st() { return P.state.tutorial || (P.state.tutorial = { step: 0, done: false }); }
+    function active() { const t = st(); return !t.done && P.state.opts.tutorial !== false && t.step < STEPS.length; }
+    function show() {
+      if (hl) { hl.classList.remove('tut-hl'); hl = null; }
+      if (!active()) { box.classList.add('hidden'); return; }
+      const s = STEPS[st().step];
+      const inFlight = mode === 'flight' || mode === 'planet';
+      if (!!s.flight !== inFlight || !$('result').classList.contains('hidden') || !$('report').classList.contains('hidden') || !$('help').classList.contains('hidden') || !$('newgame').classList.contains('hidden')) { box.classList.add('hidden'); return; }
+      const el = document.querySelector(s.sel);
+      $('tut-text').innerHTML = s.text;
+      $('tut-next').style.display = s.next ? '' : 'none';
+      box.classList.remove('hidden');
+      if (el) {
+        hl = el; el.classList.add('tut-hl');
+        const r = el.getBoundingClientRect(), bw = Math.min(340, innerWidth * 0.92);
+        let x = clamp(r.left, 8, innerWidth - bw - 8), y = r.bottom + 10;
+        if (y + 160 > innerHeight) y = Math.max(8, r.top - 170);
+        box.style.left = x + 'px'; box.style.top = y + 'px';
+      } else { box.style.left = '30%'; box.style.top = '40%'; }
+    }
+    function adv() { const t = st(); P.tutorialAdvance(t.step + 1); if (st().step >= STEPS.length) { t.done = true; P.save(); } show(); }
+    $('tut-next').onclick = adv;
+    $('tut-skip').onclick = () => { st().done = true; P.save(); show(); };
+    return {
+      update(tab) { if (!active()) { show(); return; } const s = STEPS[st().step]; if (s.when && s.when(tab)) { adv(); return; } setTimeout(show, 30); },
+      ping(ev) { if (!active()) return; const s = STEPS[st().step]; if (s.ev === ev) adv(); },
+      show,
+    };
+  })();
+
+  /* ================= AY / MARS İNİŞ SAHNESİ ================= */
+  const PL = { scene: null, cam: new T.PerspectiveCamera(50, 1, 0.5, 2e6), st: null };
+  function planetTexture(kind) {
+    return MD.canvasTex(1024, 1024, (g, w, h) => {
+      const moon = kind === 'moon';
+      g.fillStyle = moon ? '#8d8d8d' : '#a4532d'; g.fillRect(0, 0, w, h);
+      const img = g.getImageData(0, 0, w, h);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const n = vnoise(x / 40, y / 40, 1) * 0.5 + vnoise(x / 9, y / 9, 2) * 0.3 + vnoise(x / 160, y / 160, 3) * 0.6;
+        const i = (y * w + x) * 4, k = 0.7 + n * 0.45;
+        img.data[i] *= k; img.data[i + 1] *= k * (moon ? 1 : 0.95); img.data[i + 2] *= k * (moon ? 1.02 : 0.9);
+      }
+      g.putImageData(img, 0, 0);
+      for (let i = 0; i < (moon ? 260 : 70); i++) {
+        const x = Math.random() * w, y = Math.random() * h, r = Math.pow(Math.random(), 3) * (moon ? 60 : 40) + 2;
+        const gr = g.createRadialGradient(x - r * 0.25, y - r * 0.25, r * 0.1, x, y, r);
+        gr.addColorStop(0, moon ? 'rgba(40,40,40,0.55)' : 'rgba(60,20,8,0.45)'); gr.addColorStop(0.8, moon ? 'rgba(90,90,90,0.25)' : 'rgba(120,50,20,0.2)'); gr.addColorStop(0.95, moon ? 'rgba(200,200,200,0.18)' : 'rgba(230,150,100,0.15)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      }
+    }, { repeat: [24, 24] });
+  }
+  function startPlanet(kind, r) {
+    const moon = kind === 'moon';
+    const sc = new T.Scene();
+    sc.background = new T.Color(moon ? 0x000000 : 0xc89a72);
+    if (!moon) sc.fog = new T.Fog(0xc89a72, 4000, 60000);
+    sc.environment = envDay;
+    const sun = new T.DirectionalLight(0xffffff, moon ? 3.4 : 2.4); sun.position.set(-400, 300, 200); sc.add(sun);
+    sc.add(new T.HemisphereLight(moon ? 0x404850 : 0xe0b090, 0x201510, moon ? 0.15 : 0.6));
+    const tex = planetTexture(kind);
+    const ground = new T.Mesh(new T.PlaneGeometry(120000, 120000, 1, 1), new T.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }));
+    ground.rotation.x = -Math.PI / 2; sc.add(ground);
+    // kayalar
+    const rockM = new T.MeshStandardMaterial({ color: moon ? 0x777777 : 0x7a3a20, roughness: 1, flatShading: true });
+    for (let i = 0; i < 160; i++) { const s0 = Math.pow(Math.random(), 2) * 4 + 0.4; const rk = new T.Mesh(new T.DodecahedronGeometry(s0, 0), rockM); rk.position.set(rnd(-600, 600), s0 * 0.3, rnd(-600, 600)); rk.rotation.set(rnd(0, 3), rnd(0, 3), 0); sc.add(rk); }
+    if (moon) { const stars0 = new T.Points(new T.BufferGeometry().setAttribute('position', new T.Float32BufferAttribute(Array.from({ length: 3000 }, () => rnd(-1, 1) * 9e5), 3)), new T.PointsMaterial({ color: 0xffffff, size: 1.2, sizeAttenuation: false })); sc.add(stars0); const earthB = new T.Mesh(new T.SphereGeometry(18000, 32, 16), new T.MeshBasicMaterial({ map: loadTex('day', true) })); earthB.position.set(200000, 160000, -500000); sc.add(earthB); }
+    // hedef işareti
+    const pad = new T.Mesh(new T.RingGeometry(18, 22, 48), new T.MeshBasicMaterial({ color: 0x3ee08f, transparent: true, opacity: 0.7, side: T.DoubleSide })); pad.rotation.x = -Math.PI / 2; pad.position.y = 0.2; sc.add(pad);
+    const shipV = MD.ship(S.ROCKETS.ss.stages[1], { flights: 1 });
+    const plume = makePlume('raptor', 2.2, 30); plume.position.y = shipV.plumeY || -2; shipV.g.add(plume);
+    sc.add(shipV.g);
+    const dust = new Particles(2500, false); scene.remove(dust.pts); sc.add(dust.pts);
+    const g = moon ? 1.62 : 3.71;
+    PL.scene = sc;
+    PL.st = { kind, r, g, x: moon ? -1600 : -2600, h: moon ? 2600 : 4200, vx: moon ? 55 : 120, vz: moon ? -45 : -110, ang: 0, thr: 0, fuel: 1, auto: true, ship: shipV, plume, dust, done: false, t: 0, msg: null, pad };
+    mode = 'planet'; warp = 1;
+    $('hud').classList.add('hidden'); $('planet').classList.remove('hidden'); $('bcast').classList.add('hidden');
+    $('pl-title').textContent = moon ? '🌕 AY İNİŞİ' : '🔴 MARS İNİŞİ';
+    banner(moon ? 'AY YÜZEYİNE ALÇALMA' : 'MARS ATMOSFERİNE GİRİŞ', 'good');
+    voice.say(moon ? 'Ay yüzeyine alçalma başladı.' : 'Mars inişi başladı.');
+    fireP.clear(); smokeP.clear();
+  }
+  function stepPlanet(dt) {
+    const s = PL.st; if (!s || s.done) return;
+    s.t += dt;
+    const moon = s.kind === 'moon';
+    const amax = s.g * 3.2;
+    if (s.auto) {
+      // basit otomatik iniş: yatay hızı sıfırla, dikey hızı irtifaya göre ayarla
+      const tgtVx = clamp(-s.x * 0.05, -40, 40);
+      s.ang = clamp((s.vx - tgtVx) * 0.03, -0.45, 0.45);
+      const tgtVz = -Math.max(1.5, Math.min(60, s.h * 0.09));
+      const need = (tgtVz - s.vz) * 1.2 + s.g;
+      s.thr = clamp(need / (amax * Math.cos(s.ang)), 0, 1);
+    } else {
+      if (keys.KeyW || keys.ArrowUp) s.thr = clamp(s.thr + dt * 0.7, 0, 1);
+      if (keys.KeyS || keys.ArrowDown) s.thr = clamp(s.thr - dt * 0.7, 0, 1);
+      if (keys.KeyA || keys.ArrowLeft) s.ang = clamp(s.ang - dt * 0.5, -0.6, 0.6);
+      else if (keys.KeyD || keys.ArrowRight) s.ang = clamp(s.ang + dt * 0.5, -0.6, 0.6);
+      else s.ang *= Math.exp(-dt * 0.8);
+    }
+    if (s.fuel <= 0) s.thr = 0;
+    const a = s.thr > 0.02 ? Math.max(0.25, s.thr) * amax : 0;
+    s.fuel = Math.max(0, s.fuel - (a / amax) * dt / 75);
+    const drag = moon ? 0 : 0.0009 * Math.exp(-s.h / 11000);
+    s.vx += (-Math.sin(s.ang) * a - drag * s.vx * Math.abs(s.vx)) * dt;
+    s.vz += (Math.cos(s.ang) * a - s.g - drag * s.vz * Math.abs(s.vz) * Math.sign(1)) * dt;
+    s.x += s.vx * dt; s.h += s.vz * dt;
+    if (s.h <= 0) {
+      s.h = 0; s.done = true;
+      const ok = Math.abs(s.vz) < 3.5 && Math.abs(s.vx) < 2.5 && Math.abs(s.ang) < 0.18;
+      s.ok = ok;
+      if (ok) { banner(moon ? 'AY\'A İNDİK! 🌕' : 'MARS\'A İNDİK! 🔴', 'good'); voice.say(moon ? 'İniş başarılı. Ay yüzeyindeyiz.' : 'İniş başarılı. Mars yüzeyindeyiz.', true); s.thr = 0; }
+      else { banner('SERT İNİŞ — GEMİ KAYBEDİLDİ', 'bad'); voice.say('Gemi kaybedildi.', true); s.ship.g.visible = false; for (let i = 0; i < 300; i++) { const th = Math.random() * 6.28, sp = rnd(5, 60); s.dust.spawn(s.x, rnd(0, 20), 0, Math.cos(th) * sp, rnd(5, 50), Math.sin(th) * sp, rnd(2, 6), 6, 40, [1, 0.6, 0.2], [0.2, 0.18, 0.16], 1, 0, 0.6, 0); } audio.boom(1, 200); }
+      setTimeout(() => endPlanet(ok), 4500);
+    }
+    // toz
+    if (a > 0 && s.h < 80) {
+      const n = Math.ceil(dt * 120 * s.thr * (1 - s.h / 80));
+      const col = moon ? [0.6, 0.6, 0.6] : [0.7, 0.42, 0.28];
+      for (let i = 0; i < n; i++) { const th = Math.random() * 6.28, sp = rnd(20, 70) * (moon ? 1.5 : 1); s.dust.spawn(s.x, 1, 0, Math.cos(th) * sp, rnd(1, 6), Math.sin(th) * sp, moon ? rnd(1.5, 3) : rnd(3, 7), 3, 26, col, col, 0.55, 0, moon ? 0.1 : 0.6, moon ? s.g : 0.5); }
+    }
+  }
+  function renderPlanet(dtReal) {
+    const s = PL.st; if (!s) return;
+    if (!paused) { let k = Math.min(dtReal, 0.05) * warp; while (k > 0) { const d = Math.min(k, 0.02); stepPlanet(d); k -= d; } }
+    const sh = s.ship;
+    sh.g.position.set(s.x, s.h + 0.5, 0); sh.g.rotation.z = s.ang;
+    updatePlume(s.plume, s.done && s.ok ? 0 : s.thr, s.kind === 'moon' ? 0 : 600, time);
+    if (sh.flaps) for (const f of sh.flaps) f.rotation.x = 0;
+    const F0 = F.clone(); F.set(0, 0, 0);
+    s.dust.mat.uniforms.scale.value = innerHeight / (2 * Math.tan(PL.cam.fov * Math.PI / 360));
+    s.dust.update(Math.min(dtReal, 0.05));
+    F.copy(F0);
+    const d = clamp(90 + s.h * 0.12, 90, 900);
+    PL.cam.position.set(s.x + d * 0.55, s.h + 30 + d * 0.18, d * 0.85);
+    PL.cam.lookAt(s.x, s.h + 20, 0);
+    PL.cam.aspect = innerWidth / innerHeight; PL.cam.updateProjectionMatrix();
+    renderer.toneMappingExposure = 1.05;
+    renderer.render(PL.scene, PL.cam);
+    $('pl-alt').textContent = s.h.toFixed(0) + ' m';
+    $('pl-vz').textContent = s.vz.toFixed(1) + ' m/s'; $('pl-vz').style.color = s.h < 200 && s.vz < -6 ? 'var(--bad)' : '';
+    $('pl-vx').textContent = s.vx.toFixed(1) + ' m/s';
+    $('pl-fuel').textContent = '%' + (s.fuel * 100).toFixed(0);
+    $('pl-thr').style.width = (s.thr * 100) + '%';
+    $('pl-hint').textContent = s.auto ? 'Otomatik iniş — Boşluk: elle kontrole geç' : 'W/S gaz · A/D eğim · Boşluk: otomatik · hedef: <3.5 m/s dikey, <2.5 m/s yatay';
+  }
+  function endPlanet(ok) {
+    const s = PL.st; if (!s) return;
+    const r = s.r; r.landed = ok;
+    if (!ok) r.reason = (s.kind === 'moon' ? 'Ay' : 'Mars') + ' yüzeyine sert iniş';
+    PL.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+    PL.scene = null; PL.st = null;
+    $('planet').classList.add('hidden');
+    mode = 'flight';
+    finishMission(r);
+  }
+
   /* ================= ANA DÖNGÜ ================= */
   let last = performance.now(), time = 0, fpsAcc = 0, fpsN = 0, lowQ = false;
   function frame(now) {
@@ -1684,6 +2301,11 @@
       }
       fpsAcc = 0; fpsN = 0;
     }
+    if (mode === 'planet') {
+      renderPlanet(dtReal);
+      return;
+    }
+    if (mode === 'flight' && mission) { checkHold(); voice.countdown(mission.t); }
     if (mode === 'flight' && mission && !paused) {
       inputStep(dtReal);
       autoLogic(dtReal);
@@ -1704,6 +2326,7 @@
     fireP.mat.uniforms.scale.value = psc; smokeP.mat.uniforms.scale.value = psc;
     fireP.update(pdt); smokeP.update(pdt);
     updateDebris(pdt);
+    updateBlasts();
     updateSats(dtReal);
     updateConstellation(time, mode === 'hangar' || cam.map);
     updateMapLines(cam.map && mode === 'flight');
@@ -1716,9 +2339,12 @@
     }
     const sky = updateSky();
     updateStatics(sky);
-    if (mode === 'flight') updateHUD(dtReal);
+    updateWeatherFX(dtReal, sky);
+    if (mode === 'flight') { updateHUD(dtReal); updateBroadcast(); }
     if (bloom) bloom.strength = mode === "hangar" ? 0.3 : 0.5;
     if (composer && QUAL.bloom) composer.render(); else renderer.render(scene, camera);
+    if (mode === 'flight' && mission) renderPip(); else { $('pip-frame').classList.add('hidden'); $('pip-label').classList.add('hidden'); }
+    if (mode === 'hangar') renderPreview(dtReal);
   }
 
   /* ================= BAŞLANGIÇ ================= */
@@ -1743,6 +2369,7 @@
         onStation: rebuildNetLayer,
         onSelect: () => setSite(P.state.sel.rocket === 'ss' ? 'starbase' : 'cape'),
         onSettings: () => { applyQuality(P.state.opts.quality || 'high'); setMuted(!!P.state.opts.muted); },
+        onPreview: k => { pvWant = k; },
       });
       H.render();
       $('loading').classList.add('hidden');
@@ -1752,7 +2379,7 @@
   }
   // test / hata ayıklama erişimi
   window.GAME = {
-    get mission() { return mission; }, get ctx() { return ctxCur; }, P, setWarp: w => { warp = w; }, startLaunch, backToHangar,
+    get mission() { return mission; }, get mode() { return mode; }, startPlanet, get PL() { return PL; }, voice, get ctx() { return ctxCur; }, P, setWarp: w => { warp = w; }, startLaunch, backToHangar,
     setFocus: id => { const c = mission && mission.crafts.find(k => k.id === id); if (c) setFocus(c); }, cam, setHour: h => { sunHour = h; },
   };
   init();

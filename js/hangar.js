@@ -29,7 +29,7 @@ window.HANGAR = (function () {
     $('btn-rep-close').onclick = () => { $('report').classList.add('hidden'); if (P.state.pendingEvent) showEvent(); };
     $('btn-reset').onclick = e => { e.preventDefault(); $('newgame').classList.remove('hidden'); };
     document.querySelectorAll('#newgame [data-diff]').forEach(b => b.onclick = () => { P.reset(b.dataset.diff); $('newgame').classList.add('hidden'); render(); hooks.onWeek && hooks.onWeek(); });
-    $('btn-ng-cancel').onclick = () => $('newgame').classList.add('hidden');
+    $('btn-ng-cancel').onclick = () => { $('newgame').classList.add('hidden'); render(); };
     $('btn-help').onclick = e => { e.preventDefault(); $('help').classList.remove('hidden'); };
     $('btn-export').onclick = e => {
       e.preventDefault();
@@ -70,7 +70,7 @@ window.HANGAR = (function () {
     body.classList.toggle('wide', tab === 'research' || tab === 'stats');
     const f = { launch: tabLaunch, research: tabResearch, fac: tabFac, fleet: tabFleet, net: tabNet, contracts: tabContracts, finance: tabFinance, stats: tabStats, sandbox: tabSandbox, ach: tabAch }[tab] || tabLaunch;
     f(body);
-    $('preview').classList.toggle('hidden', tab !== 'launch');
+    $('preview').classList.toggle('hidden', tab !== 'launch' && tab !== 'sandbox');
     window.TUT && window.TUT.update(tab);
   }
 
@@ -560,6 +560,7 @@ window.HANGAR = (function () {
     body.querySelectorAll('[data-sb-mode]').forEach(e => e.onclick = () => { s.mode = e.dataset.sbMode; render(); });
     for (const id of ['mass', 'hour', 'wind', 'jet', 'waves']) { const el = $('sb-' + id); el.oninput = () => { s[id] = +el.value; $('sbv-' + id).textContent = el.value + { mass: ' kg', hour: ':00', wind: ' m/s', jet: ' m/s', waves: ' m' }[id]; }; }
     for (const id of ['gto', 'engineFail', 'autoLand', 'manualLanding', 'shipReturn', 'fairingRec']) { const el = $('sb-' + id); if (el) el.onchange = () => { s[id] = el.checked; }; }
+    hooks.onPreview && hooks.onPreview(s.rocket);
     $('sb-go').onclick = () => {
       const ctx = P.sandboxCtx({ rocket: s.rocket, mode: s.mode, payload: s.rocket === 'f1' ? 'test' : 'starlink', mass: s.mass, targetAp: s.gto ? 35786000 : 0, shipReturn: s.shipReturn, fairingRec: s.fairingRec, manualLanding: s.manualLanding, autoLand: s.autoLand, engineFail: s.engineFail,
         weather: { hour: s.hour, wind: s.wind, windDir: 1, jet: s.jet, waves: s.waves, cloud: 30, rain: false, fog: false, storm: false } });

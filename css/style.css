@@ -206,8 +206,8 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
 .warn-btn { background: rgba(255,194,74,0.18) !important; border-color: var(--warn) !important; color: var(--warn) !important; }
 .hold { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(2,4,9,0.55); z-index: 15; }
 .hold.hidden { display: none; }
-.manual-panel { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%); width: 300px; border-color: rgba(255,194,74,0.6); }
-.bcast { position: absolute; left: 50%; transform: translateX(-50%); bottom: 34px; width: min(760px, 70vw); display: flex; align-items: center; gap: 10px; background: linear-gradient(90deg, rgba(8,14,26,0.92), rgba(8,14,26,0.7)); border: 1px solid var(--line); border-left: 4px solid var(--bad); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.manual-panel { position: absolute; top: 340px; left: 12px; width: 250px; border-color: rgba(255,194,74,0.6); }
+.bcast { position: absolute; left: 50%; transform: translateX(-50%); bottom: 58px; width: min(760px, 70vw); display: flex; align-items: center; gap: 10px; background: linear-gradient(90deg, rgba(8,14,26,0.92), rgba(8,14,26,0.7)); border: 1px solid var(--line); border-left: 4px solid var(--bad); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .bc-live { color: var(--bad); font-weight: 800; letter-spacing: 1px; animation: pulse 1.5s infinite; white-space: nowrap; }
 #bc-chart { width: 240px; height: 40px; flex: none; }
 #bc-text { display: flex; gap: 14px; flex-wrap: wrap; }
@@ -264,6 +264,6 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
   .preview { display: none; }
   .bcast { display: none; }
   .pip-frame, .pip-label { display: none; }
-  .manual-panel { width: 92vw; bottom: 118px; }
+  .manual-panel { width: 92vw; top: auto; bottom: 118px; left: 4vw; }
   .tut { max-width: 92vw; left: 4vw !important; }
 }
