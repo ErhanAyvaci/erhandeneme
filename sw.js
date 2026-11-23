@@ -1,7 +1,7 @@
 /* Yörünge Ağı — çevrimdışı oynama için service worker
    Kod dosyaları: önce ağ (güncellemeler hemen gelsin), yoksa önbellek
    Büyük sabit dosyalar (three.js, dokular, simgeler): önce önbellek */
-const VERSION = 'ya-v3-1';
+const VERSION = 'ya-v3-3';
 const CORE = [
   './', 'css/style.css', 'manifest.webmanifest', 'favicon.svg',
   'js/textures.js', 'js/sim.js', 'js/progress.js', 'js/models.js', 'js/hangar.js', 'js/game.js',

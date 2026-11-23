@@ -398,7 +398,7 @@
     g.putImageData(img, 0, 0);
   }, { color: false, repeat: [600, 600] });
 
-  let siteCap, shipCap, falconPad, starTower, starTower2, starExtras, lzPads = [], droneShipV, fairingShipV;
+  let pad40, pad39, tugV, crewV = [], siteCap, shipCap, falconPad, starTower, starTower2, starExtras, lzPads = [], droneShipV, fairingShipV;
   function rebuildSiteCap(site) {
     if (!siteCap) return;
     const old = siteCap.geometry;
@@ -411,7 +411,8 @@
     shipCap = new T.Mesh(capGeometry(90000, 80, 120, oceanColor), new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.15, normalMap: waveNormal, normalScale: new T.Vector2(0.4, 0.4) }));
     shipCap.visible = false; shipCap.receiveShadow = true; scene.add(shipCap);
     patchLand(siteCap.material); patchOcean(shipCap.material); shipCap.material.roughness = 0.18;
-    falconPad = MD.falconPad(); scene.add(falconPad.g);
+    pad40 = MD.falconPad(); scene.add(pad40.g); pad39 = MD.falconPad('39a'); scene.add(pad39.g); falconPad = pad40;
+    tugV = MD.tug(); tugV.g.visible = false; scene.add(tugV.g);
     for (const d of [1100, 1400, 1700]) { const g = MD.landingZone(); g.userData.d = d; lzPads.push(g); scene.add(g); }
     starTower = MD.mechazilla(98, true); scene.add(starTower.g);
     starTower2 = MD.mechazilla(98, false); scene.add(starTower2.g);
@@ -598,7 +599,7 @@
         if (core) p.vis.serial = core.id;
         if (flights > 0) tintFlown(p.vis.g, flights);
       } else if (p.role === 'upper') {
-        p.vis = withPlume(d.key === 'ss' ? MD.ship(st[1], { flights: P0.ship ? P0.ship.flights : 0 }) : MD.falconUpper(st[1], d.key === 'f1'));
+        p.vis = withPlume(d.key === 'ss' ? MD.ship(st[1], { flights: P0.ship ? P0.ship.flights : 0, missingTiles: (ctx.tileLoss || 0) > 0.5 }) : MD.falconUpper(st[1], d.key === 'f1'));
       } else if (p.role === 'sideL' || p.role === 'sideR') {
         const core = p.role === 'sideL' ? cores[0] : cores[1];
         p.vis = withPlume(MD.falconBooster(d.sides, { nose: true, side: true, flights: core ? fl(core.id) : 0, fins: m.sideMode !== 'exp', legs: m.sideMode !== 'exp', titanium: ti, sideAttach: p.role === 'sideL' ? 1 : -1 }));
@@ -614,10 +615,9 @@
       fairingAll = MD.fairingHalves(fr, d.payloadLen);
       if (kind === 'starlink') payloadMesh = MD.payloadStack(m.satsPlanned, d.key === 'f1' ? 0.9 : 2.6, d.payloadLen * 0.55);
       else {
-        const g = new T.Group();
-        const w = d.key === 'f1' ? 0.8 : 2.4;
-        const body = new T.Mesh(new T.BoxGeometry(w, d.payloadLen * 0.45, w), MD.M.alu); body.position.y = d.payloadLen * 0.25; g.add(body);
-        const foil = new T.Mesh(new T.BoxGeometry(w * 1.02, d.payloadLen * 0.2, w * 1.02), new T.MeshStandardMaterial({ color: 0xd4a43a, metalness: 0.9, roughness: 0.3 })); foil.position.y = d.payloadLen * 0.35; g.add(foil);
+        const g = MD.geoSat(d.key === 'f1' ? 0.3 : 1.05);
+        for (const w of g.userData.wings) w.scale.z = 0.06;
+        g.position.y = 0.3;
         payloadMesh = g;
       }
     }
@@ -686,6 +686,13 @@
         const s = v.settle;
         v.g.translateY(-1.6 * Math.min(1, s * 1.6));
         if (s < 0.7) v.g.translateX(Math.sin(time * 40) * 0.08 * (1 - s));
+        if (s >= 1 && c.rec) {
+          v.liftT = (v.liftT || 0) + dtReal;
+          const L = Math.min(9, Math.max(0, v.liftT - 3) * 0.35);
+          v.g.translateY(L);
+          const tw = c.rec.kind === 'shipcatch' ? starTower2 : starTower;
+          if (tw && tw.setLift) tw.setLift(L);
+        }
       }
       if (c.tipped) {
         v.tip = (v.tip || 0) + dtReal;
@@ -713,14 +720,25 @@
         if (pv.fins && pv.fins.length) {
           const tgt = c.finsOut || (c.rec && c.type !== 'upper') ? 1 : 0;
           pv.finT = lerp(pv.finT || 0, tgt, Math.min(1, dtReal * 2.5));
-          for (const f of pv.fins) f.rotation.z = -pv.finT * Math.PI / 2;
+          const defl = clamp(((c.dirCmd !== undefined ? c.dirCmd : c.dir) - c.dir) * 3, -0.35, 0.35);
+          pv.fins.forEach((f, i) => { f.rotation.z = -pv.finT * Math.PI / 2; if (f.userData.roll) f.userData.roll.rotation.y = pv.finT * (defl * (i % 2 ? 1 : -1) + Math.sin(time * 1.7 + i) * 0.04 * (c.state === 'final' || c.state === 'descent' ? 1 : 0)); });
+        }
+        if (pv.gimbals) {
+          const cmd = thr > 0 ? clamp(((c.dirCmd !== undefined ? c.dirCmd : c.dir) - c.dir) * 2.2, -0.12, 0.12) : 0;
+          pv.gimT = lerp(pv.gimT || 0, cmd, Math.min(1, dtReal * 6));
+          pv.gimbals.forEach((gm, i) => { gm.rotation.z = pv.gimT + (thr > 0 ? Math.sin(time * 9 + i * 1.3) * 0.004 : 0); });
+        }
+        if (pv.details) {
+          const near = v.g.position.distanceTo(camera.position) < (QUAL.vol >= 32 ? 6000 : QUAL.vol >= 18 ? 2500 : QUAL.vol ? 1200 : 500);
+          if (pv.detailVis !== near) { pv.detailVis = near; for (const o of pv.details) o.visible = near; }
         }
         if (pv.legs && pv.legs.length) {
           const tgt = c.legsOut ? 1 : 0;
           pv.legT = lerp(pv.legT || 0, tgt, Math.min(1, dtReal * 1.4));
           if (c.landed && !c.splashed) pv.legComp = Math.min(1, (pv.legComp || 0) + dtReal * 2.2);
           const bounce = pv.legComp ? Math.sin(pv.legComp * Math.PI) * 4 * (1 - pv.legComp * 0.5) : 0;
-          for (const l of pv.legs) l.rotation.z = -(pv.legT * 108 + bounce) * Math.PI / 180;
+          pv.legs.forEach((l, i) => { l.rotation.z = -(clamp(pv.legT * 1.35 - i * 0.12, 0, 1) * 108 + bounce) * Math.PI / 180; });
+          if (pv.post) pv.post();
         }
         if (pv.flaps && c.ship) {
           const act = c.state === 'reentry' || (c.state === 'final' && !c.burnLit);
@@ -802,6 +820,13 @@
     }
     jellyfish(c, v, thr, h, dt);
     // kalkış buharı
+    if (h < 80 && c.type === 'stack' && falconPad && mission.key !== 'ss') {
+      const surf = surfacePoint(0, 1), up = [Math.cos(surf[2]), Math.sin(surf[2])], east = [up[1], -up[0]], R = (falconPad.anim.deluge ? falconPad.anim.deluge.r : 8);
+      const n = Math.ceil(dt * 160 * (1 - h / 80));
+      for (let i = 0; i < n; i++) { const th = Math.random() * Math.PI * 2, out = rnd(3, 9), upv = rnd(14, 32);
+        smokeP.spawn(surf[0] + east[0] * Math.cos(th) * R, surf[1] + east[1] * Math.cos(th) * R, Math.sin(th) * R, east[0] * Math.cos(th) * out + up[0] * upv, east[1] * Math.cos(th) * out + up[1] * upv, Math.sin(th) * out,
+          rnd(1.2, 2.4), 0.8, 4, [1, 1, 1], [0.92, 0.95, 1], 0.7, 0, 0.3, 9.8); }
+    }
     if (h < 400 && c.type === 'stack') {
       const n = Math.ceil(dt * 60 * (h < 160 ? 7 : 2.5) * thr);
       const surf = surfacePoint(0, 1), up = [Math.cos(surf[2]), Math.sin(surf[2])], east = [up[1], -up[0]];
@@ -1002,6 +1027,7 @@
       s.g.position.x += s.vel[0] * dt; s.g.position.y += s.vel[1] * dt; s.g.position.z += s.vel[2] * dt;
       s.g.rotation.x += s.spin[0] * dt; s.g.rotation.y += s.spin[1] * dt; s.g.rotation.z += s.spin[2] * dt;
       if (s.g.userData.panels) for (const p of s.g.userData.panels) { p.scale.x = clamp((s.t - 3) / 4, 0.05, 1); }
+      if (s.g.userData.wings) for (const w of s.g.userData.wings) w.scale.z = clamp((s.t - 4) / 6, 0.06, 1);
       if (s.t > 150) { s.g.parent && s.g.parent.remove(s.g); sats3d.splice(i, 1); }
     }
   }
@@ -1393,6 +1419,8 @@
     const ss = mission ? mission.key === 'ss' : P.state.sel.rocket === 'ss';
     placeSurface(siteCap, 0, 0); siteCap.visible = inFlight && lowCam;
     for (const k of ['cape', 'starbase']) { const g = siteDetail[k] || (inFlight && curSite === k ? buildSiteDetail(k) : null); if (!g) continue; g.visible = inFlight && lowCam && curSite === k && sky.hc < 30000; if (g.visible) placeSurface(g, 0, 0); }
+    const fh = mission ? mission.key === 'fh' : P.state.sel.rocket === 'fh';
+    falconPad = fh ? pad39 : pad40; (fh ? pad40 : pad39).g.visible = false;
     placeSurface(falconPad.g, 0, 0); falconPad.g.visible = inFlight && !ss;
     for (const g of lzPads) { placeSurface(g, g.userData.d, 0); g.visible = inFlight && !ss; }
     placeSurface(starTower.g, 0, 0); starTower.g.visible = inFlight && ss;
@@ -1406,6 +1434,7 @@
       droneShipV.g.rotateX(Math.sin(ph * 0.7) * mission.waves * 0.006);
       if (mission.waves > 1 && lowCam && Math.random() < mission.waves * 0.08) { const d0 = mission.shipD + rnd(-45, 45), p0 = surfacePoint(d0, 1), sd = Math.random() < 0.5 ? -1 : 1; smokeP.spawn(p0[0], p0[1], sd * 27, 0, rnd(2, 6), sd * rnd(2, 6), rnd(1, 2.2), 2, 9, [0.95, 0.97, 1], [0.9, 0.92, 0.95], 0.55, 0, 0.6, 6); }
       placeSurface(shipCap, mission.shipD, -0.6);
+      tugV.g.visible = inFlight && lowCam; placeSurface(tugV.g, mission.shipD - 420, 0.3); tugV.g.translateZ(160); tugV.g.translateY(Math.sin(mission.t * 0.7) * mission.waves * 0.3);
       // Octagrabber: inişten sonra booster'ın altına girip sabitler
       const lb = P.has('k_octa') && mission.crafts.find(c => c.rec && c.rec.kind === 'asds' && c.landed && !c.tipped && c.alive);
       if (lb) {
@@ -1424,7 +1453,15 @@
         droneShipV.octa.position.set(lerp(-34, dx, e), 3, lerp(9, 0, e));
         if (k >= 1 && !lb.octaDone) { lb.octaDone = true; log('Octagrabber booster\'ı güverteye sabitledi', 'good'); }
       } else if (droneShipV.octa) droneShipV.octa.visible = false;
-    } else { droneShipV.g.visible = false; shipCap.visible = false; }
+    } else { droneShipV.g.visible = false; shipCap.visible = false; tugV.g.visible = false; }
+    // inişten sonra güvenlik ekibi araçları iniş alanına gider
+    const lc = mission && mission.crafts.find(c => c.rec && c.rec.kind === 'rtls' && c.landed && !c.splashed);
+    if (lc && !crewV.length) { for (let i = 0; i < 3; i++) { const v = MD.vehicle(i === 1 ? 0xc0392b : 0xf2f2f2); scene.add(v); crewV.push(v); } crewV.t0 = mission.t; crewV.d = lc.rec.target; }
+    crewV.forEach((v, i) => {
+      const k = clamp((mission.t - crewV.t0 - 25 - i * 4) / 55, 0, 1), e = k * k * (3 - 2 * k);
+      placeSurface(v, lerp(crewV.d - 1100 - i * 30, crewV.d - 70 - i * 14, e), 0); v.translateZ(lerp(260, 40 + i * 12, e));
+      v.visible = inFlight && lowCam;
+    });
     if (mission && mission.fairingShipD !== undefined) {
       fairingShipV.g.visible = inFlight; placeSurface(fairingShipV.g, mission.fairingShipD, 1);
       if (!shipCap.visible && lowCam) { shipCap.visible = inFlight; placeSurface(shipCap, mission.fairingShipD, -0.6); }
@@ -1461,6 +1498,7 @@
     setSite(ctx.site);
     sunHour = ctx.hour + 0.5; sunWeek = ctx.week;
     vis.forEach(v => { scene.remove(v.g); if (v.sheath) scene.remove(v.sheath); }); vis.clear(); clearTrain();
+    for (const v of crewV) scene.remove(v); crewV = []; if (starTower && starTower.setLift) { starTower.setLift(0); starTower2.setLift(0); }
     if (PL.scene) { PL.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); PL.scene = null; PL.st = null; $('planet').classList.add('hidden'); }
     mission = new S.Mission(P0.rocket, Object.assign({}, ctx.simOpts));
     mission.autoDeploy = false;
@@ -1519,7 +1557,11 @@
       case 'sideSep': log('Yan boosterlar ayrıldı (BECO)'); banner('YAN BOOSTER AYRILMASI'); puffs(c, 'side'); break;
       case 'stageSep': log('Kademe ayrılması'); banner('KADEME AYRILMASI'); voice.say('Kademe ayrılması'); puffs(c, 'stage'); break;
       case 'ses': log('2. kademe ateşlemesi (SES-1)'); break;
-      case 'fairing': log('Burun konisi ayrıldı'); banner('BURUN KONİSİ AYRILDI'); break;
+      case 'fairing': {
+        log('Burun konisi ayrıldı'); banner('BURUN KONİSİ AYRILDI');
+        const v0 = vis.get(c.id); if (v0 && v0.ef) { const ax = axisOf(v0); for (let i = 0; i < 60; i++) { const y = c.length - rnd(0.5, 12); smokeP.spawn(v0.ef[0] + ax[0] * y, v0.ef[1] + ax[1] * y, rnd(-0.3, 0.3), rnd(-6, 6), rnd(-6, 6), (Math.random() < 0.5 ? -1 : 1) * rnd(8, 20), rnd(0.6, 1.4), 0.5, 3, [1, 1, 1], [1, 1, 1], 0.5, 0, 1.5, 0); } }
+        break;
+      }
       case 'chute': log(nm + ': paraşüt açıldı'); if (mission.fairingShipD === undefined) mission.fairingShipD = c.downrange() + 900; break;
       case 'fairingRec': log(nm + (d.ok ? ': ağlı gemiye indi ✓' : ': denize düştü (ıslak, kısmen kurtarıldı)'), d.ok ? 'good' : ''); break;
       case 'seco': log('SECO — Apoapsis ' + (isFinite(d.orbit.ap) ? (d.orbit.ap / 1000).toFixed(0) : '∞') + ' km, Periapsis ' + (d.orbit.pe / 1000).toFixed(0) + ' km', d.ok ? 'good' : 'bad'); break;
@@ -1721,6 +1763,7 @@
   function backToHangar() {
     $('result').classList.add('hidden'); $('hud').classList.add('hidden'); $('hangar').classList.remove('hidden'); $('touch').classList.add('hidden');
     vis.forEach(v => { scene.remove(v.g); if (v.sheath) scene.remove(v.sheath); }); vis.clear(); clearTrain();
+    for (const v of crewV) scene.remove(v); crewV = []; if (starTower && starTower.setLift) { starTower.setLift(0); starTower2.setLift(0); }
     for (const d of debris) scene.remove(d.mesh); debris = [];
     for (const s of sats3d) s.g.parent && s.g.parent.remove(s.g); sats3d = [];
     mission = null; ctxCur = null; mode = 'hangar'; cam.map = false; warp = 1; cam.mode = 'chase';
@@ -2044,6 +2087,7 @@
     return null;
   }
   function pipRect() { const w = Math.round(Math.min(340, innerWidth * 0.26)), h = Math.round(w * 0.6); return { x: innerWidth - w - 260, y: 130, w, h }; }
+  const _black = new T.Color(0x000000);
   function renderPip() {
     const c = choosePip();
     const fr = $('pip-frame'), lb = $('pip-label');
@@ -2062,7 +2106,8 @@
     const low = c.alt() < 45000;
     const capVis = siteCap.visible, shVis = shipCap.visible, fog = scene.fog, skyVis = skyDome.visible, vcVis = volClouds ? volClouds.visible : false;
     if (volClouds) volClouds.visible = false;
-    if (c.alt() > 50000) skyDome.visible = false; else skyDome.position.copy(pipCam.position);
+    const bg0 = scene.background;
+    if (c.alt() > 50000) { skyDome.visible = false; scene.background = _black; } else skyDome.position.copy(pipCam.position);
     if (low) { siteCap.visible = true; if (mission.shipD !== undefined) shipCap.visible = true; }
     scene.fog = null;
     const yb = innerHeight - R0.y - R0.h;
@@ -2072,7 +2117,7 @@
     renderer.render(scene, pipCam);
     renderer.autoClear = ac;
     renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
-    siteCap.visible = capVis; shipCap.visible = shVis; scene.fog = fog; skyDome.visible = skyVis; skyDome.position.copy(camera.position); if (volClouds) volClouds.visible = vcVis;
+    siteCap.visible = capVis; shipCap.visible = shVis; scene.fog = fog; skyDome.visible = skyVis; scene.background = bg0; skyDome.position.copy(camera.position); if (volClouds) volClouds.visible = vcVis;
     fr.classList.remove('hidden'); lb.classList.remove('hidden');
     Object.assign(fr.style, { left: R0.x + 'px', top: yb + 'px', width: R0.w + 'px', height: R0.h + 'px', right: 'auto', bottom: 'auto' });
     Object.assign(lb.style, { left: (R0.x + 6) + 'px', top: (yb + 6) + 'px' });
@@ -2673,7 +2718,7 @@
       const r = 450 + Math.pow(Math.random(), 0.7) * 5500, a = Math.random() * Math.PI * 2;
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
       if (!isLand(x, z)) continue;
-      if (Math.abs(x - 1400) < 500 && Math.abs(z) < 300) continue; // iniş alanları
+      if (Math.abs(x - 1400) < 750 && Math.abs(z) < 450) continue; // iniş alanları
       if (vnoise(x / 600, z / 600, 4.4) < (sb ? 0.55 : 0.4)) continue;
       const hgt = sb ? rnd(1, 2.5) : rnd(6, 16), wid = sb ? rnd(1.2, 3) : hgt * rnd(0.25, 0.4);
       M4.compose(Pv.set(x, drop(x, z) + (sb ? hgt * 0.3 : 0), z), Q, Sv.set(wid, hgt, wid));
@@ -2697,6 +2742,8 @@
       box(50, 14, 30, white, 1400, 420); // LZ kontrol binası
       for (let i = 0; i < 3; i++) { const t0 = new T.Mesh(new T.SphereGeometry(10, 16, 12), white); t0.position.set(-260 + i * 26, drop(0, 0) + 10, -300); g.add(t0); }
       road([[0, 0], [-500, 40], [-1400, 300], [-3000, 600], [vx + 200, vz]]);
+      { const cr = MD.crane(80); cr.position.set(-560, drop(-560, 200), 200); cr.rotation.y = 0.6; g.add(cr); }
+      { const tr = MD.transporter(); tr.position.set(-900, drop(-900, 60) + 0.2, 60); tr.rotation.y = -0.05; g.add(tr); }
       road([[-1400, 300], [-800, 900], [1000, 600], [1400, 0]]);
     } else {
       // Starbase: tank çiftliği, üretim alanı, "roket bahçesi", Highway 4
@@ -2706,6 +2753,8 @@
       box(60, 80, 40, steel, -2300, -80); box(45, 60, 35, steel, -2380, 10); box(120, 30, 70, white, -2500, -150);
       for (let i = 0; i < 6; i++) { const x = -2150 - i * 22, z = 120; tank(4.5, i % 2 ? 50 : 70, x, z); const nose = new T.Mesh(new T.ConeGeometry(4.5, 12, 24), steel); nose.position.set(x, drop(x, z) + (i % 2 ? 50 : 70) + 6, z); g.add(nose); }
       road([[-200, 60], [-1200, 80], [-2200, 40], [-4000, -200], [-7000, -600]]);
+      { const cr = MD.crane(110); cr.position.set(-2250, drop(-2250, 220), 220); cr.rotation.y = -0.8; g.add(cr); }
+      { const cr = MD.crane(70); cr.position.set(-160, drop(-160, -60), -60); cr.rotation.y = 2.2; g.add(cr); }
     }
     siteDetail[site] = g; g.visible = false; scene.add(g);
     return g;
@@ -3041,15 +3090,30 @@
     if (mission) updateTrain();
     oceanU.uTime.value = mission ? mission.t : time; oceanU.uAmp.value = mission ? Math.max(0.2, (mission.waves || 1) * 0.5) : 0.4;
     if (mode === 'flight') { updateHUD(dtReal); updateBroadcast(); }
-    if (bloom) bloom.strength = mode === "hangar" ? 0.3 : 0.5;
+    if (bloom) bloom.strength = mode === "hangar" ? 0.3 : 0.38;
     if (composer && QUAL.bloom) composer.render(); else renderer.render(scene, camera);
     if (mode === 'flight' && mission) renderPip(); else { $('pip-frame').classList.add('hidden'); $('pip-label').classList.add('hidden'); }
     if (mode === 'hangar') renderPreview(dtReal);
   }
 
   /* ================= BAŞLANGIÇ ================= */
-  function init() {
+  // isteğe bağlı GLB modelleri (models/manifest.json)
+  async function loadGLBModels() {
+    if (!(location.protocol === 'http:' || location.protocol === 'https:')) return;
+    let man = null;
+    try { const r = await fetch('models/manifest.json', { cache: 'no-cache' }); if (r.ok) man = await r.json(); } catch (e) { return; }
+    const keys = man ? Object.keys(man).filter(k => man[k] && man[k].file) : [];
+    if (!keys.length) return;
+    $('load-text').textContent = '3D modeller yükleniyor…';
+    try {
+      const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
+      const ld = new GLTFLoader();
+      await Promise.all(keys.map(k => new Promise(res => ld.load(man[k].file, gl => { MD.GLB[k] = Object.assign({ scene: gl.scene }, man[k]); res(); }, undefined, () => { console.warn('GLB yüklenemedi:', man[k].file); res(); }))));
+    } catch (e) { console.warn('GLTFLoader yüklenemedi', e); }
+  }
+  async function init() {
     $('load-text').textContent = 'Dünya ve fırlatma sahası hazırlanıyor…';
+    await loadGLBModels();
     setTimeout(() => {
       P.load();
       applyQuality(P.state.opts.quality || 'high');

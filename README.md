@@ -122,6 +122,25 @@ Dokunmatik cihazlarda ekran düğmeleri otomatik görünür.
 - **Starlink treni:** bırakılan uydular yörüngede inci dizisi gibi açılır (yer/teleobjektif kamerasıyla izlenebilir).
 - **Kalite:** Düşük / Orta / Yüksek / **Ultra** — hacimli bulut adım sayısı, lens efektleri, gölgeler ve parçacık yoğunluğu buna göre ölçeklenir.
 
+## Modeller
+
+- **Falcon 9 / Heavy:** soğutma borulu Merlin nozulları, turbopompa egzozları, gimbal aktüatörleri; oktaweb alt plakası;
+  kalın çerçeveli kafes ızgara kanatçıklar (uçuşta kendi ekseninde döner); A-çerçeve iniş bacakları ve teleskopik amortisörler
+  (bacaklar sırayla açılır, inişte esner); ara kademede azot iticileri ve ayırma pistonları; panel/perçin normal haritası.
+- **Üst kademe:** rejeneratif + niyobyum uzantılı MVac, COPV kubbeleri, yük adaptörü; Falcon 1'de altın renkli Kestrel.
+- **Starship / Super Heavy:** kaynak halkalı çelik normal haritası, kabartmalı altıgen karolar (hasarlı Ship'te eksik karolar),
+  turbopompalı Raptor'lar (iç motorlar gimbal yapar), dış motor kalkanları, kanatçık menteşe kaportaları, yakalama pimleri.
+- **Dragon:** güneş paneli + radyatörlü gövde, SuperDraco çiftleri, 16 Draco iticisi, pencereler, kenetlenme halkası.
+- **Uydular:** nesle göre Starlink (faz dizili antenler, lazer terminalleri, Hall iticisi); altın folyolu GEO uydusu (çanak antenler,
+  yörüngede açılan güneş kanatları); radyatörlü ve modüllü uzay istasyonu.
+- **Rampalar:** SLC-40 ve Falcon Heavy için LC-39A (pas rengi servis kulesi, mürettebat erişim kolu, tek paratoner kulesi);
+  alev çukuru, fırlatma tablası, su püskürtme (deluge) halkası ve kalkışta su sisi, yakıt boru hatları.
+- **Starbase:** gerçek kafes köşe dikmeli Mechazilla, kasnaklar ve halatlar; yakalamadan sonra kollar booster'ı kaldırır; alev saptırıcı.
+- **Gemiler ve araçlar:** azimut iticili, patlama duvarlı drone gemi ve Octagrabber; römorkör; ağ kollu burun konisi gemisi;
+  paletli vinçler, booster taşıyan tır, RTLS inişinden sonra iniş alanına giden güvenlik ekibi araçları.
+- **Performans:** küçük parçalar kameradan uzaklaşınca gizlenir (mesafe kaliteye göre değişir).
+- **GLB desteği:** `models/manifest.json` ile isteğe bağlı GLB modelleri yüklenebilir (bkz. `models/README.md`).
+
 ## Altyapı
 
 - **Hızlı açılış:** düşük çözünürlüklü dokular sayfayla gelir, yüksek çözünürlük (`js/textures-hi.js`) arka planda yüklenir.
