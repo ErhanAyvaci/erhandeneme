@@ -6,6 +6,9 @@
 <title>Yörünge Ağı — Roket Simülatörü</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#05070d">
 <meta name="description" content="Yörünge Ağı — gerçekçi roket simülasyonu ve uydu interneti stratejisi. Falcon 1'den Starship'e, booster inişleri ve kule yakalamaları.">
 <script>
@@ -47,9 +50,12 @@
     <button data-tab="fleet">♻ Filo</button>
     <button data-tab="net">🌐 Ağ</button>
     <button data-tab="contracts">📄 Sözleşmeler</button>
+    <button data-tab="finance">💰 Finans</button>
+    <button data-tab="stats">📈 İstatistik</button>
+    <button data-tab="sandbox">🧪 Serbest mod</button>
     <button data-tab="ach">🏆 Başarımlar</button>
   </nav>
-  <div id="tab-body" class="tab-body"></div>
+  <div class="hg-main"><div id="tab-body" class="tab-body"></div><div id="preview" class="preview hidden"><div class="pv-label" id="pv-label"></div></div></div>
   <div class="hg-foot"><a href="#" id="btn-help">Nasıl oynanır?</a> · <a href="#" id="btn-export">Kaydı indir</a> · <a href="#" id="btn-import">Kayıt yükle</a> · <a href="#" id="btn-reset">İlerlemeyi sıfırla</a><input type="file" id="file-import" accept=".json,application/json" hidden></div>
 </div>
 
@@ -93,6 +99,27 @@
     <div class="gauge"><div class="g-zone early">ERKEN</div><div class="g-zone ok">İDEAL</div><div class="g-zone late">GEÇ</div><div id="lp-needle"></div></div>
     <div id="lp-hint" class="lp-hint">L — iniş yanışını ateşle</div>
   </div>
+  <div id="manual-panel" class="panel manual-panel hidden">
+    <div class="lp-title">🕹 ELLE İNİŞ</div>
+    <div class="row"><label>İrtifa</label><b id="mp-alt">0</b></div>
+    <div class="row"><label>Dikey hız</label><b id="mp-vz">0</b></div>
+    <div class="row"><label>Yatay hız</label><b id="mp-vx">0</b></div>
+    <div class="row"><label>Hedefe</label><b id="mp-dx">0</b></div>
+    <div class="bar-row"><label>Gaz</label><div class="bar"><div id="mp-thr"></div></div></div>
+    <div class="lp-hint">W/S gaz · A/D yönelim · 2 m/s altında yere değ</div>
+  </div>
+  <div id="bcast" class="bcast hidden"><div class="bc-live">● CANLI</div><canvas id="bc-chart" width="360" height="60"></canvas><div id="bc-text"></div></div>
+  <canvas id="pip-frame" class="pip-frame hidden"></canvas>
+  <div id="pip-label" class="pip-label hidden"></div>
+  <div id="wx-fx" class="wx-fx"></div>
+  <div id="hold" class="hold hidden">
+    <div class="res-box">
+      <h1 class="bad">⚠ GERİ SAYIM DURDURULDU</h1>
+      <p id="hold-text"></p>
+      <button class="big-btn" id="hold-abort">İptal et (masrafın %85'i iade)</button>
+      <button class="big-btn warn-btn" id="hold-go">Riski al, devam et</button>
+    </div>
+  </div>
   <div class="hud-bottom" id="keys">
     <span><kbd>Boşluk</kbd> kademe</span><span><kbd>T</kbd> otopilot</span><span><kbd>A</kbd>/<kbd>D</kbd> yönelim</span>
     <span><kbd>W</kbd>/<kbd>S</kbd> gaz</span><span><kbd>V</kbd> kamera</span><span><kbd>N</kbd> sinematik açı</span><span><kbd>M</kbd> harita</span>
@@ -119,6 +146,37 @@
     <h1 id="rep-title">Haftalık rapor</h1>
     <div id="rep-lines" class="res-lines"></div>
     <button id="btn-rep-close" class="big-btn">Devam</button>
+  </div>
+</div>
+
+<div id="event" class="screen hidden">
+  <div class="res-box">
+    <h1 id="ev-title">Olay</h1>
+    <p id="ev-text"></p>
+    <div id="ev-choices"></div>
+    <p id="ev-result" class="muted"></p>
+  </div>
+</div>
+<div id="newgame" class="screen hidden">
+  <div class="res-box">
+    <h1>Yeni oyun</h1>
+    <p class="muted">Mevcut ilerleme silinir. Zorluk seç:</p>
+    <button class="big-btn" data-diff="easy">🟢 Kolay — $160 M başlangıç, az arıza, sakin hava, zayıf rakipler</button>
+    <button class="big-btn" data-diff="normal">🟡 Normal — $100 M, dengeli</button>
+    <button class="big-btn" data-diff="hard">🔴 Zor — $75 M, sık arıza, sert hava, güçlü rakipler (abone hedefi %42)</button>
+    <button class="btn" id="btn-ng-cancel" style="margin-top:8px">Vazgeç</button>
+  </div>
+</div>
+<div id="tut" class="tut hidden"><div id="tut-text"></div><div class="tut-btns"><button class="btn" id="tut-skip">Eğitimi kapat</button> <button class="btn good" id="tut-next">İleri</button></div></div>
+<div id="planet" class="planet hidden">
+  <div class="panel pl-panel">
+    <div class="lp-title" id="pl-title">AY İNİŞİ</div>
+    <div class="row"><label>İrtifa</label><b id="pl-alt">0</b></div>
+    <div class="row"><label>Dikey hız</label><b id="pl-vz">0</b></div>
+    <div class="row"><label>Yatay hız</label><b id="pl-vx">0</b></div>
+    <div class="row"><label>Yakıt</label><b id="pl-fuel">0</b></div>
+    <div class="bar-row"><label>Gaz</label><div class="bar"><div id="pl-thr"></div></div></div>
+    <div class="lp-hint" id="pl-hint">W/S gaz · A/D yatay · Boşluk otomatik</div>
   </div>
 </div>
 

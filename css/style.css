@@ -51,8 +51,12 @@ button { font-family: inherit; cursor: pointer; }
 .tabs { display: flex; gap: 4px; padding: 8px 22px 0; flex-wrap: wrap; }
 .tabs button { background: rgba(8,14,26,0.8); border: 1px solid var(--line); border-bottom: none; color: var(--muted); padding: 8px 13px; border-radius: 8px 8px 0 0; font-size: 13px; }
 .tabs button.sel { color: var(--text); background: rgba(16,28,48,0.95); border-color: rgba(79,195,255,0.5); }
-.tab-body { width: min(760px, 100%); margin-left: 22px; flex: 1; min-height: 0; overflow-y: auto; background: rgba(10,18,32,0.9); border: 1px solid var(--line); border-radius: 0 10px 10px 10px; padding: 14px 16px; margin-bottom: 6px; }
+.hg-main { flex: 1; min-height: 0; display: flex; gap: 10px; pointer-events: none; }
+.hg-main > .tab-body { pointer-events: auto; }
+.tab-body { width: min(760px, 100%); margin-left: 22px; min-height: 0; overflow-y: auto; background: rgba(10,18,32,0.9); border: 1px solid var(--line); border-radius: 0 10px 10px 10px; padding: 14px 16px; margin-bottom: 6px; }
 .tab-body.wide { width: calc(100% - 44px); }
+.preview { flex: 1; position: relative; min-width: 0; }
+.pv-label { position: absolute; bottom: 14px; left: 0; right: 0; text-align: center; font-weight: 800; letter-spacing: 3px; color: rgba(230,237,247,0.85); text-shadow: 0 2px 8px #000; font-size: 15px; }
 .hg-foot { padding: 0 22px 10px; font-size: 12px; color: var(--muted); }
 .hg-foot a { color: var(--muted); }
 .tab-body h3 { margin: 12px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
@@ -161,7 +165,7 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
   font-size: 11px; color: var(--muted); text-shadow: 0 1px 3px #000; max-width: 92vw; }
 
 /* ---------- Sonuç ---------- */
-#result, #help, #report { display: flex; align-items: center; justify-content: center; background: rgba(2,4,9,0.6); z-index: 20; }
+#result, #help, #report, #event, #newgame { display: flex; align-items: center; justify-content: center; background: rgba(2,4,9,0.6); z-index: 20; }
 .res-box { max-height: 92vh; overflow-y: auto; width: 460px; max-width: 92vw; background: rgba(8,14,26,0.92); border: 1px solid var(--line); border-radius: 14px; padding: 22px 26px; }
 .res-box h1 { margin: 0 0 4px; letter-spacing: 3px; }
 .res-box h1.good { color: var(--good); } .res-box h1.bad { color: var(--bad); }
@@ -181,6 +185,43 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
 .tgroup.right { justify-content: flex-end; }
 .touch button { min-width: 52px; height: 46px; border-radius: 10px; border: 1px solid var(--line); background: rgba(8,14,26,0.78); color: var(--text); font-size: 12px; font-weight: 700; touch-action: none; }
 .touch button:active { background: rgba(79,195,255,0.3); }
+/* ---------- v3 eklemeleri ---------- */
+.challenge { background: rgba(255,211,107,0.1); border: 1px solid rgba(255,211,107,0.4); border-radius: 9px; padding: 7px 11px; font-size: 12px; margin-bottom: 10px; }
+.challenge.done { border-color: rgba(62,224,143,0.5); background: rgba(62,224,143,0.1); }
+.week-btn.pulse { animation: pulse 1.2s infinite; border-color: var(--warn); color: var(--warn); background: rgba(255,194,74,0.14); }
+@keyframes pulse { 50% { box-shadow: 0 0 16px rgba(255,194,74,0.7); } }
+.rhead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; margin-bottom: 8px; }
+.rqueue { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.rqueue > div { background: rgba(79,195,255,0.08); border: 1px solid rgba(79,195,255,0.35); border-radius: 8px; padding: 7px 9px; font-size: 12px; }
+.rqueue .bar { margin: 4px 0; }
+.tnode.active { border-color: var(--accent); box-shadow: 0 0 10px rgba(79,195,255,0.35); }
+.tbl tr.selrow td { background: rgba(79,195,255,0.1); }
+.tbl select, .tab-body input[type=text], .tab-body input:not([type]) { background: rgba(0,0,0,0.35); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.chart { background: rgba(0,0,0,0.2); border: 1px solid var(--line); border-radius: 8px; padding: 6px; }
+.chart .ct { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+.chart canvas { width: 100%; height: auto; display: block; }
+.chk.sb input[type=range] { flex: 1; max-width: 260px; }
+.ev-btn { margin-top: 8px; font-size: 14px; text-align: left; }
+.warn-btn { background: rgba(255,194,74,0.18) !important; border-color: var(--warn) !important; color: var(--warn) !important; }
+.hold { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(2,4,9,0.55); z-index: 15; }
+.hold.hidden { display: none; }
+.manual-panel { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%); width: 300px; border-color: rgba(255,194,74,0.6); }
+.bcast { position: absolute; left: 50%; transform: translateX(-50%); bottom: 34px; width: min(760px, 70vw); display: flex; align-items: center; gap: 10px; background: linear-gradient(90deg, rgba(8,14,26,0.92), rgba(8,14,26,0.7)); border: 1px solid var(--line); border-left: 4px solid var(--bad); border-radius: 6px; padding: 4px 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.bc-live { color: var(--bad); font-weight: 800; letter-spacing: 1px; animation: pulse 1.5s infinite; white-space: nowrap; }
+#bc-chart { width: 240px; height: 40px; flex: none; }
+#bc-text { display: flex; gap: 14px; flex-wrap: wrap; }
+#bc-text b { color: #fff; }
+.pip-frame { position: absolute; right: 250px; bottom: 120px; pointer-events: none; border: 2px solid rgba(79,195,255,0.7); border-radius: 6px; box-shadow: 0 0 14px rgba(0,0,0,0.6); }
+.pip-label { position: absolute; font-size: 11px; font-weight: 700; letter-spacing: 1px; background: rgba(8,14,26,0.85); padding: 2px 6px; border-radius: 4px; pointer-events: none; }
+.wx-fx { position: absolute; inset: 0; pointer-events: none; }
+.wx-fx canvas { width: 100%; height: 100%; }
+.tut { position: absolute; z-index: 30; max-width: 340px; background: rgba(10,22,40,0.97); border: 1px solid var(--accent); box-shadow: 0 0 24px rgba(79,195,255,0.45); border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.45; }
+.tut .tut-btns { margin-top: 8px; text-align: right; }
+.tut-hl { outline: 2px solid var(--accent) !important; outline-offset: 2px; box-shadow: 0 0 18px rgba(79,195,255,0.7) !important; }
+.planet { position: absolute; inset: 0; pointer-events: none; z-index: 6; }
+.pl-panel { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); width: 280px; pointer-events: auto; }
+
 @media (max-width: 900px) {
   .tab-body { margin-left: 8px; width: calc(100% - 16px); }
   .tabs { padding: 6px 8px 0; }
@@ -220,4 +261,9 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
   .land-panel { width: 92vw; bottom: 118px; font-size: 11px; }
   .res-box { padding: 16px; }
   .touch button { min-width: 44px; height: 40px; font-size: 10px; }
+  .preview { display: none; }
+  .bcast { display: none; }
+  .pip-frame, .pip-label { display: none; }
+  .manual-panel { width: 92vw; bottom: 118px; }
+  .tut { max-width: 92vw; left: 4vw !important; }
 }
