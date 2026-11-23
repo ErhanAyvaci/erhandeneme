@@ -445,12 +445,13 @@
     let mass = 0, targetAlt = null, targetAp = 0, fairing = true, kind = P.payload, sats = 0, reward = 0, contract = null;
     if (P.payload === 'test') { mass = rk === 'f1' ? 180 : 2000; P.desc = 'Test yükü (kütle simülatörü)'; }
     if (P.payload === 'starlink') {
-      const gen = currentGen(); const G = SAT_GENS[gen];
+      let gen = currentGen();
+      if (gen === 'v3' && rk !== 'ss') gen = 'v2m';
+      const G = SAT_GENS[gen];
       const shell = sel.shell === 's53' || has('u_polar') ? sel.shell : 's53';
       P.shell = SHELLS[shell] ? shell : 's53';
       const capN = Math.floor(leo * SHELLS[P.shell].factor / G.mass);
       sats = Math.min(capN, state.stock.sats);
-      if (gen === 'v3' && rk !== 'ss') { sats = 0; P.reasons.push('V3 uyduları sadece Starship ile taşınabilir'); }
       if (sats <= 0) { P.ok = false; P.reasons.push('Stokta uydu yok — Uydu fabrikası kur ve haftayı bitir'); }
       mass = sats * G.mass; P.gen = gen; P.capN = capN;
       targetAlt = 300000;
