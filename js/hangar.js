@@ -97,6 +97,8 @@ window.HANGAR = (function () {
     h += `<label class="chk"><input type="checkbox" id="o-auto" ${st.opts.autopilot ? 'checked' : ''}> Yükseliş otopilotu</label>`;
     h += `<label class="chk"><input type="checkbox" id="o-land" ${st.opts.autoLand ? 'checked' : ''}> Otomatik iniş yanışı / yakalama (kapalıysa L ve C tuşlarıyla sen yaparsın)</label>`;
     h += `<label class="chk"><input type="checkbox" id="o-cam" ${st.opts.cinematic ? 'checked' : ''}> Sinematik kamera</label>`;
+    const q = st.opts.quality || 'high';
+    h += `<div class="chk">Grafik kalitesi: ${['low', 'med', 'high'].map(k => `<button class="btn ${q === k ? 'good' : ''}" data-q="${k}" style="padding:3px 9px">${{ low: 'Düşük', med: 'Orta', high: 'Yüksek' }[k]}</button>`).join(' ')} <label style="margin-left:8px"><input type="checkbox" id="o-snd" ${st.opts.muted ? '' : 'checked'}> Ses</label></div>`;
     // hava & özet
     const w = plan.weather;
     h += '<div class="row2"><div><h3>Hava durumu — ' + (plan.site === 'starbase' ? 'Starbase' : 'Cape Canaveral') + '</h3>';
@@ -133,6 +135,8 @@ window.HANGAR = (function () {
     chk('o-auto', v => { st.opts.autopilot = v; });
     chk('o-land', v => { st.opts.autoLand = v; });
     chk('o-cam', v => { st.opts.cinematic = v; });
+    chk('o-snd', v => { st.opts.muted = !v; hooks.onSettings && hooks.onSettings(); });
+    body.querySelectorAll('[data-q]').forEach(e => e.onclick = () => { st.opts.quality = e.dataset.q; st.opts.autoQuality = false; P.save(); hooks.onSettings && hooks.onSettings(); render(); });
     const bo = $('b-order');
     if (bo) bo.onclick = () => { const I0 = P.ROCKET_INFO[plan.rocket]; const t = P.readyCores(I0.core).length < I0.cores ? I0.core : 'ship'; if (P.orderCore(t)) render(); };
     const b = $('b-launch');

@@ -44,6 +44,21 @@
     composer.addPass(new window.OutputPass());
   } catch (e) { composer = null; }
 
+  /* ================= GRAFİK KALİTESİ ================= */
+  const QUALITY = {
+    low: { pr: 1, shadows: false, bloom: false, part: 0.45, name: 'Düşük' },
+    med: { pr: Math.min(window.devicePixelRatio || 1, 1.5), shadows: true, bloom: true, part: 0.75, name: 'Orta' },
+    high: { pr: Math.min(window.devicePixelRatio || 1, 2), shadows: true, bloom: true, part: 1, name: 'Yüksek' },
+  };
+  let QUAL = QUALITY.high;
+  function applyQuality(q) {
+    QUAL = QUALITY[q] || QUALITY.high;
+    renderer.setPixelRatio(QUAL.pr);
+    renderer.setSize(innerWidth, innerHeight);
+    if (composer) composer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.enabled = QUAL.shadows;
+  }
+
   const SUN = new T.Vector3(0.42, 0.78, 0.46).normalize();
   const sunLight = new T.DirectionalLight(0xfff2e0, 3.2);
   sunLight.castShadow = true;
@@ -348,22 +363,32 @@
       g.setAttribute('position', new T.BufferAttribute(this.pos, 3).setUsage(T.DynamicDrawUsage));
       g.setAttribute('size', new T.BufferAttribute(this.size, 1).setUsage(T.DynamicDrawUsage));
       g.setAttribute('color', new T.BufferAttribute(this.col, 4).setUsage(T.DynamicDrawUsage));
+      const seed = new Float32Array(max); for (let i = 0; i < max; i++) seed[i] = Math.random();
+      g.setAttribute('seed', new T.BufferAttribute(seed, 1));
       this.geo = g;
       this.mat = new T.ShaderMaterial({
         uniforms: { scale: { value: innerHeight / (2 * Math.tan(55 * Math.PI / 360)) }, tint: { value: new T.Color(1, 1, 1) } },
         vertexShader: `#include <common>
           #include <logdepthbuf_pars_vertex>
-          attribute float size; attribute vec4 color; varying vec4 vC; uniform float scale;
-          void main(){ vC = color; vec4 mv = modelViewMatrix*vec4(position,1.0); gl_Position = projectionMatrix*mv;
+          attribute float size; attribute vec4 color; attribute float seed; varying vec4 vC; varying float vS; uniform float scale;
+          void main(){ vC = color; vS = seed; vec4 mv = modelViewMatrix*vec4(position,1.0); gl_Position = projectionMatrix*mv;
             gl_PointSize = size > 0.0 ? clamp(size*scale/max(0.1,-mv.z), 1.0, 1500.0) : 0.0;
             #include <logdepthbuf_vertex>
           }`,
         fragmentShader: `#include <common>
           #include <logdepthbuf_pars_fragment>
-          varying vec4 vC; uniform vec3 tint;
-          void main(){ vec2 c = gl_PointCoord-0.5; float d = length(c)*2.0; if(d>1.0) discard;
-            float a = (1.0-d*d); a *= a;
-            ${additive ? 'gl_FragColor = vec4(vC.rgb*vC.a*a, 1.0);' : 'gl_FragColor = vec4(vC.rgb*tint, vC.a*a);'}
+          varying vec4 vC; varying float vS; uniform vec3 tint;
+          float hh(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+          float nn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+            return mix(mix(hh(i), hh(i+vec2(1.0,0.0)), f.x), mix(hh(i+vec2(0.0,1.0)), hh(i+vec2(1.0,1.0)), f.x), f.y); }
+          float fb(vec2 p){ float a = 0.0, w = 0.5; for (int k = 0; k < 4; k++) { a += w * nn(p); p *= 2.07; w *= 0.5; } return a; }
+          void main(){ vec2 c = gl_PointCoord-0.5;
+            float an = vS * 6.2831; c = mat2(cos(an), -sin(an), sin(an), cos(an)) * c;
+            float d = length(c)*2.0; if(d>1.0) discard;
+            float n = fb(c * 3.2 + vS * 37.0);
+            ${additive
+              ? 'float a = (1.0-d*d); a *= a * (0.55 + 0.9 * n); gl_FragColor = vec4(vC.rgb*vC.a*a, 1.0);'
+              : 'float a = smoothstep(1.0, 0.2, d + (n - 0.5) * 0.85); float sh = 0.78 + 0.45 * (n - 0.45) - c.y * 0.3; gl_FragColor = vec4(vC.rgb * tint * sh, vC.a * a);'}
             #include <logdepthbuf_fragment>
           }`,
         transparent: true, depthWrite: false,
@@ -374,6 +399,7 @@
       scene.add(this.pts);
     }
     spawn(px, py, pz, vx, vy, vz, life, s0, s1, c0, c1, a0, a1, drag, grav) {
+      if (QUAL.part < 1 && Math.random() > QUAL.part) return;
       const i = this.i; this.i = (this.i + 1) % this.max;
       this.p[i * 3] = px; this.p[i * 3 + 1] = py; this.p[i * 3 + 2] = pz;
       this.v[i * 3] = vx; this.v[i * 3 + 1] = vy; this.v[i * 3 + 2] = vz;
@@ -774,7 +800,7 @@
     }
     if (v) v.g.visible = false;
     shake = Math.max(shake, h < 2000 ? 1.4 : 0.6);
-    audio.boom(h < 3000 ? 1 : 0.4);
+    audio.boom(h < 3000 ? 1 : 0.4, camDistTo(mid[0], mid[1], 0));
   }
   function updateDebris(dt) {
     for (let i = debris.length - 1; i >= 0; i--) {
@@ -986,55 +1012,88 @@
 
   /* ================= SES ================= */
   const audio = (() => {
-    let ctx = null, rumble, rumbleG, crackG, master;
+    // Prosedürel ses: motor gürlemesi + çatırtı, ses hızında gecikme (Doppler), havada sönümlenme, rüzgâr, ses patlamaları
+    let ctx = null, master, engDelay, engLP, rumLP, rumG, crG, engG, windG, muted = false;
+    const SOS = 343;
+    function noise(sec, kind) {
+      const len = ctx.sampleRate * sec, b = ctx.createBuffer(1, len, ctx.sampleRate), d = b.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        if (kind === 'brown') { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
+        else if (kind === 'crackle') d[i] = w * (Math.random() < 0.025 ? 1 : 0.2);
+        else d[i] = w;
+      }
+      return b;
+    }
+    function loop(buf) { const s = ctx.createBufferSource(); s.buffer = buf; s.loop = true; s.start(); return s; }
     function init() {
-      if (ctx) return;
+      if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
       try {
         ctx = new (window.AudioContext || window.webkitAudioContext)();
-        master = ctx.createGain(); master.gain.value = 0.6; master.connect(ctx.destination);
-        const len = ctx.sampleRate * 3, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
-        let last = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; }
-        rumble = ctx.createBufferSource(); rumble.buffer = buf; rumble.loop = true;
-        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 180;
-        rumbleG = ctx.createGain(); rumbleG.gain.value = 0;
-        rumble.connect(lp); lp.connect(rumbleG); rumbleG.connect(master);
-        const wb = ctx.createBuffer(1, len, ctx.sampleRate), wd = wb.getChannelData(0);
-        for (let i = 0; i < len; i++) wd[i] = (Math.random() * 2 - 1) * (Math.random() < 0.02 ? 1 : 0.25);
-        const cr = ctx.createBufferSource(); cr.buffer = wb; cr.loop = true;
-        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 700; bp.Q.value = 0.6;
-        crackG = ctx.createGain(); crackG.gain.value = 0;
-        cr.connect(bp); bp.connect(crackG); crackG.connect(master);
-        rumble.start(); cr.start();
+        master = ctx.createGain(); master.gain.value = muted ? 0 : 0.6; master.connect(ctx.destination);
+        // motor zinciri
+        const bus = ctx.createGain();
+        rumLP = ctx.createBiquadFilter(); rumLP.type = 'lowpass'; rumLP.frequency.value = 180;
+        rumG = ctx.createGain(); rumG.gain.value = 1;
+        loop(noise(4, 'brown')).connect(rumLP); rumLP.connect(rumG); rumG.connect(bus);
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 650; bp.Q.value = 0.5;
+        crG = ctx.createGain(); crG.gain.value = 0.4;
+        loop(noise(3, 'crackle')).connect(bp); bp.connect(crG); crG.connect(bus);
+        engDelay = ctx.createDelay(30); engDelay.delayTime.value = 0;
+        engLP = ctx.createBiquadFilter(); engLP.type = 'lowpass'; engLP.frequency.value = 8000;
+        engG = ctx.createGain(); engG.gain.value = 0;
+        bus.connect(engDelay); engDelay.connect(engLP); engLP.connect(engG); engG.connect(master);
+        // rüzgâr
+        const hp = ctx.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 900; hp.Q.value = 0.3;
+        windG = ctx.createGain(); windG.gain.value = 0;
+        loop(noise(3, 'white')).connect(hp); hp.connect(windG); windG.connect(master);
       } catch (e) { ctx = null; }
     }
-    function set(level) {
+    function engine(level, dist, raptor, air) {
       if (!ctx) return;
       const t = ctx.currentTime;
-      rumbleG.gain.setTargetAtTime(level * 0.9, t, 0.15);
-      crackG.gain.setTargetAtTime(level * 0.35, t, 0.1);
+      engDelay.delayTime.setTargetAtTime(clamp(dist / SOS, 0, 28), t, 0.6);
+      engLP.frequency.setTargetAtTime(clamp(9000 / (1 + dist / 900), 90, 9000) * (0.25 + 0.75 * air), t, 0.3);
+      rumLP.frequency.setTargetAtTime(raptor ? 120 : 190, t, 0.5);
+      crG.gain.setTargetAtTime(raptor ? 0.25 : 0.45, t, 0.5);
+      engG.gain.setTargetAtTime(clamp(level, 0, 1.2), t, 0.15);
     }
-    function boom(v) {
+    function wind(q) { if (ctx) windG.gain.setTargetAtTime(clamp(q / 35000, 0, 1) * 0.18, ctx.currentTime, 0.3); }
+    function set(v) { if (ctx) engG.gain.setTargetAtTime(v, ctx.currentTime, 0.15); }
+    function burst(v, dist, decay, freq, at) {
       if (!ctx) return;
-      const len = ctx.sampleRate * 2.5, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
-      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.5));
-      const s = ctx.createBufferSource(); s.buffer = buf;
-      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 500;
-      const g = ctx.createGain(); g.gain.value = v * 1.4;
-      s.connect(lp); lp.connect(g); g.connect(master); s.start();
+      const len = ctx.sampleRate * Math.min(3, decay * 6), b = ctx.createBuffer(1, len, ctx.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * decay));
+      const s = ctx.createBufferSource(); s.buffer = b;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = freq / (1 + dist / 3000);
+      const g = ctx.createGain(); g.gain.value = v / (1 + dist / 2500);
+      s.connect(lp); lp.connect(g); g.connect(master);
+      s.start(ctx.currentTime + Math.min(25, dist / SOS) + (at || 0));
     }
-    function sonic() {
-      if (!ctx) return;
-      for (let k = 0; k < 3; k++) {
-        const len = ctx.sampleRate * 0.5, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
-        for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.06));
-        const s = ctx.createBufferSource(); s.buffer = buf;
-        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 220;
-        const g = ctx.createGain(); g.gain.value = 1.2; s.connect(lp); lp.connect(g); g.connect(master);
-        s.start(ctx.currentTime + k * 0.35);
-      }
-    }
-    return { init, set, boom, sonic };
+    function boom(v, dist) { burst(v * 1.6, dist || 0, 0.5, 520); burst(v * 0.8, dist || 0, 1.2, 160, 0.05); }
+    function sonic(dist) { for (let k = 0; k < 3; k++) burst(1.4, dist || 0, 0.05, 260, k * 0.33); }
+    function setMuted(m) { muted = m; if (master) master.gain.setTargetAtTime(m ? 0 : 0.6, ctx.currentTime, 0.05); }
+    return { init, set, engine, wind, boom, sonic, setMuted, get muted() { return muted; } };
   })();
+  // kameradan dünya noktasına uzaklık (EF koordinatı)
+  const camDistTo = (x, y, z) => Math.hypot(x - F.x - camera.position.x, y - F.y - camera.position.y, (z || 0) - F.z - camera.position.z);
+  function updateAudio() {
+    if (!mission || mode !== 'flight' || cam.map) { audio.set(0); audio.wind(0); return; }
+    let best = 0, bd = 0, br = false, bair = 1;
+    for (const k of mission.crafts) {
+      if (!k.alive || !k.thrust) continue;
+      const v = vis.get(k.id); if (!v || !v.ef) continue;
+      const d = camDistTo(v.ef[0], v.ef[1], 0);
+      const air = clamp(S.rho(k.alt()) / 1.225 * 4, 0, 1);
+      const onb = k.id === camFocusId && (cam.mode === 'onboard' || d < 400) ? 0.12 : 0;
+      const lv = Math.min(1.2, Math.sqrt(k.thrust / 7e6)) * Math.max(air, onb) / (1 + d / 1500);
+      if (lv > best) { best = lv; bd = d; br = mission.key === 'ss'; bair = air; }
+    }
+    audio.engine(best, bd, br, bair);
+    const f = focusCraft();
+    audio.wind(f && f.alive && (cam.mode === 'onboard' || cam.mode === 'chase') ? f.q : 0);
+  }
 
 
 
@@ -1182,7 +1241,7 @@
     sunLight.intensity = 3.4 * clamp((fEl + 0.03) / 0.12, 0, 1);
     sunLight.color.setRGB(1, lerp(0.62, 0.95, clamp(fEl / 0.25, 0, 1)), lerp(0.42, 0.88, clamp(fEl / 0.25, 0, 1)));
     const fAlt = F.length() - RE;
-    const sh = !cam.map && mode !== 'hangar' && fAlt < 3000 && sunLight.intensity > 0.3;
+    const sh = QUAL.shadows && !cam.map && mode !== 'hangar' && fAlt < 3000 && sunLight.intensity > 0.3;
     sunLight.castShadow = sh;
     if (sh) {
       const ext = clamp(cam.dist * 1.2, 60, 400);
@@ -1233,7 +1292,9 @@
 
 
   /* ================= GÖREV AKIŞI ================= */
-  let mode = 'hangar', warp = 1, simAcc = 0, endTimer = null, autoCamTimer = 0;
+  let mode = 'hangar', warp = 1, simAcc = 0, endTimer = null, autoCamTimer = 0, paused = false;
+  function setPaused(v) { paused = v; $('h-pause').textContent = paused ? '▶' : '⏸'; banner(paused ? 'DURAKLATILDI' : 'DEVAM', 'info'); }
+  function setMuted(v) { P.state.opts.muted = v; P.save(); audio.setMuted(v); const b = $('h-mute'); if (b) b.textContent = v ? '🔇' : '🔊'; }
   const WARPS = [1, 2, 5, 10, 25, 50, 100];
   const keys = {};
   const PHASES = { countdown: 'Geri sayım', ascent1: '1. kademe yükselişi', meco: 'MECO', ascent2: '2. kademe yanışı', orbit: 'Yörüngede', failed: 'Görev başarısız', failed2: 'Yörünge kaybedildi' };
@@ -1255,7 +1316,7 @@
     sats3d = []; fireP.clear(); smokeP.clear();
     setFocus(mission.stack);
     cam.tdist = cam.dist = mission.stack.length * 3.4; cam.yaw = 0.35; cam.pitch = 0.1; cam.map = false; cam.mode = 'chase';
-    warp = 1; simAcc = 0; autoCamTimer = 0;
+    warp = 1; simAcc = 0; autoCamTimer = 0; paused = false; $('h-pause').textContent = '⏸';
     if (starTower) starTower.open = 1; if (starTower2) starTower2.open = 1;
     mode = 'flight';
     $('hangar').classList.add('hidden'); $('result').classList.add('hidden'); $('hud').classList.remove('hidden');
@@ -1318,7 +1379,7 @@
       case 'flip': log('Ship: dikey konuma çevrilme manevrası'); banner('ÇEVRİLME MANEVRASI'); break;
       case 'final':
         log(nm + ': son yaklaşma — iniş hazırlığı');
-        if (!c.ship) audio.sonic();
+        if (!c.ship) { const v0 = vis.get(c.id); audio.sonic(v0 && v0.ef ? camDistTo(v0.ef[0], v0.ef[1], 0) : 3000); }
         if (autoCam) {
           const f = focusCraft();
           const busy = f && f.rec && f.alive && !f.landed && !f.caught && f !== c;
@@ -1361,7 +1422,7 @@
       const sp = rnd(20, 80);
       fireP.spawn(e[0] + ax[0] * 2 + side[0] * 1.5, e[1] + ax[1] * 2 + side[1] * 1.5, rnd(-1, 1), side[0] * sp + rnd(-10, 10), side[1] * sp + rnd(-10, 10), rnd(-20, 20), rnd(0.3, 1), 2, 8, [1, 0.9, 0.6], [0.7, 0.2, 0], 1, 0, 1.5, 0);
     }
-    shake = Math.max(shake, 0.6); audio.boom(0.35);
+    shake = Math.max(shake, 0.6); audio.boom(0.35, camDistTo(e[0], e[1], 0));
   }
 
   function inputStep(dtReal) {
@@ -1393,6 +1454,8 @@
       case 'KeyN': { const i = (CAM_MODES.indexOf(cam.mode) + 1) % CAM_MODES.length; cam.mode = CAM_MODES[i]; banner(CAM_NAMES[cam.mode]); break; }
       case 'KeyM': cam.map = !cam.map; break;
       case 'KeyH': $('keys').classList.toggle('hidden'); break;
+      case 'KeyO': setPaused(!paused); break;
+      case 'KeyU': setMuted(!P.state.opts.muted); break;
       case 'Comma': changeWarp(-1); break;
       case 'Period': changeWarp(1); break;
       case 'Escape': abortMission(); break;
@@ -1482,6 +1545,8 @@
     H.render();
   }
   $('btn-back').onclick = backToHangar;
+  $('h-pause').onclick = () => setPaused(!paused);
+  $('h-mute').onclick = () => setMuted(!P.state.opts.muted);
 
   /* ================= HUD ================= */
   let hudT = 0;
@@ -1495,7 +1560,7 @@
     hudT = 0.1;
     $('h-clock').textContent = fmtT(m.t);
     $('h-phase').textContent = PHASES[m.phase] || m.phase;
-    $('h-warp').textContent = warp + '×' + (warp >= maxWarp() && maxWarp() < 100 ? ' (sınır)' : '');
+    $('h-warp').textContent = paused ? 'DURDU' : warp + '×' + (warp >= maxWarp() && maxWarp() < 100 ? ' (sınır)' : '');
     if (c) {
       $('h-name').textContent = c.name;
       $('h-state').textContent = c.landed ? 'indi' : c.caught ? 'yakalandı' : !c.alive ? 'kayıp' : (c.rec || c.state === 'expended' ? STATES[c.state] || '' : '');
@@ -1520,17 +1585,6 @@
     const html = list.map(k => `<button data-id="${k.id}" class="${k.id === camFocusId ? 'sel' : ''} ${!k.alive ? 'dead' : ''} ${k.landed || k.caught ? 'ok' : ''}">${k.name}</button>`).join('');
     if (cams._h !== html) { cams.innerHTML = html; cams._h = html; cams.querySelectorAll('button').forEach(b => b.onclick = () => { const k = m.crafts.find(q => q.id === +b.dataset.id); if (k) { setFocus(k); m.camLock = true; } }); }
     drawProfile();
-    // ses seviyesi
-    let lvl = 0;
-    for (const k of m.crafts) {
-      if (!k.alive || !k.thrust) continue;
-      const v = vis.get(k.id); if (!v) continue;
-      const dist = v.g.position.length() + cam.dist * 0.2;
-      const T0 = k.thrust / 8e6;
-      const air = 0.2 + 0.8 * clamp(S.rho(k.alt()) / 1.225 * 3, 0, 1);
-      lvl += Math.min(1, Math.sqrt(T0)) * air / (1 + dist / 400);
-    }
-    audio.set(clamp(lvl, 0, 1));
   }
   function partName(p) {
     return { booster: mission.key === 'ss' ? 'Super Heavy' : '1. kademe', upper: mission.key === 'ss' ? 'Ship' : '2. kademe', sideL: 'Yan B. (Sol)', sideR: 'Yan B. (Sağ)' }[p.role] || p.role;
@@ -1600,8 +1654,16 @@
     const dtReal = Math.min(0.05, (now - last) / 1000); last = now; time += dtReal;
     // basit uyarlanabilir kalite
     fpsAcc += dtReal; fpsN++;
-    if (fpsAcc > 3) { const fps = fpsN / fpsAcc; if (fps < 28 && !lowQ) { lowQ = true; renderer.setPixelRatio(1); if (composer) composer.setSize(innerWidth, innerHeight); } fpsAcc = 0; fpsN = 0; }
-    if (mode === 'flight' && mission) {
+    if (fpsAcc > 4) {
+      const fps = fpsN / fpsAcc;
+      if (fps < 24 && !lowQ && P.state.opts.autoQuality !== false) {
+        const order = ['high', 'med', 'low'], cur = P.state.opts.quality || 'high', i = order.indexOf(cur);
+        if (i < 2) { P.state.opts.quality = order[i + 1]; P.save(); applyQuality(P.state.opts.quality); if (mode === 'flight') banner('Grafik kalitesi: ' + QUAL.name); }
+        else lowQ = true;
+      }
+      fpsAcc = 0; fpsN = 0;
+    }
+    if (mode === 'flight' && mission && !paused) {
       inputStep(dtReal);
       autoLogic(dtReal);
       simAcc += dtReal * warp;
@@ -1615,7 +1677,8 @@
     updateSun();
     updateCamera(dtReal);
     if (mission) syncVisuals(dtReal, time);
-    const pdt = mode === 'flight' ? Math.min(dtReal * Math.min(warp, 4), 0.2) : dtReal;
+    const pdt = paused ? 0 : (mode === 'flight' ? Math.min(dtReal * Math.min(warp, 4), 0.2) : dtReal);
+    updateAudio();
     const psc = innerHeight / (2 * Math.tan(camera.fov * Math.PI / 360));
     fireP.mat.uniforms.scale.value = psc; smokeP.mat.uniforms.scale.value = psc;
     fireP.update(pdt); smokeP.update(pdt);
@@ -1634,7 +1697,7 @@
     updateStatics(sky);
     if (mode === 'flight') updateHUD(dtReal);
     if (bloom) bloom.strength = mode === "hangar" ? 0.3 : 0.5;
-    if (composer) composer.render(); else renderer.render(scene, camera);
+    if (composer && QUAL.bloom) composer.render(); else renderer.render(scene, camera);
   }
 
   /* ================= BAŞLANGIÇ ================= */
@@ -1642,6 +1705,8 @@
     $('load-text').textContent = 'Dünya ve fırlatma sahası hazırlanıyor…';
     setTimeout(() => {
       P.load();
+      applyQuality(P.state.opts.quality || 'high');
+      audio.setMuted(!!P.state.opts.muted);
       buildEarth();
       buildSites();
       fireP = new Particles(9000, true);
@@ -1656,6 +1721,7 @@
         onWeek: () => { sunWeek = P.state.week; rebuildConstData(); rebuildNetLayer(); },
         onStation: rebuildNetLayer,
         onSelect: () => setSite(P.state.sel.rocket === 'ss' ? 'starbase' : 'cape'),
+        onSettings: () => { applyQuality(P.state.opts.quality || 'high'); setMuted(!!P.state.opts.muted); },
       });
       H.render();
       $('loading').classList.add('hidden');
