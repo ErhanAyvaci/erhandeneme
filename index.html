@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yörünge Ağı — Roket Simülatörü</title>
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- ============ HANGAR ============ -->
+<div id="hangar" class="screen">
+  <header class="hg-top">
+    <div class="brand"><span class="logo-dot"></span>YÖRÜNGE AĞI <small>Uydu İnterneti Programı</small></div>
+    <div class="hg-stats">
+      <div><label>Bütçe</label><b id="st-money">$0</b></div>
+      <div><label>Yörüngedeki uydu</label><b id="st-sats">0</b></div>
+      <div><label>Küresel kapsama</label><b id="st-cov">0%</b></div>
+      <div><label>Fırlatma</label><b id="st-launch">0</b></div>
+      <div><label>Kurtarılan booster</label><b id="st-rec">0</b></div>
+    </div>
+  </header>
+  <div class="hg-goal">
+    <div class="goal-text">Hedef: dünyaya kesintisiz internet — <b>%95 kapsama</b> (≈1650 uydu)</div>
+    <div class="cov-bar"><div id="cov-fill"></div><span id="cov-label"></span></div>
+  </div>
+  <div class="hg-body">
+    <div id="rocket-list" class="rocket-list"></div>
+    <div class="launch-panel">
+      <h2 id="sel-name">—</h2>
+      <p id="sel-desc" class="muted"></p>
+      <div id="sel-specs" class="specs"></div>
+      <h3>Booster kurtarma</h3>
+      <div id="mode-list" class="mode-list"></div>
+      <h3>Uçuş ayarları</h3>
+      <label class="chk"><input type="checkbox" id="opt-auto" checked> Yükseliş otopilotu (kapalıysa A/D ile sen yönlendirirsin)</label>
+      <label class="chk"><input type="checkbox" id="opt-autoland"> Otomatik iniş yanışı (kapalıysa L tuşu ile sen ateşlersin, C ile yakalarsın)</label>
+      <label class="chk"><input type="checkbox" id="opt-cam" checked> Sinematik kamera (iniş anında boostera geçer)</label>
+      <div class="cost-line"><span>Fırlatma maliyeti</span><b id="sel-cost">$0</b></div>
+      <div class="cost-line"><span>Tahmini gelir</span><b id="sel-income">$0</b></div>
+      <button id="btn-launch" class="big-btn">🚀 FIRLAT</button>
+      <div id="launch-warn" class="warn"></div>
+      <div class="small-links"><a href="#" id="btn-reset">İlerlemeyi sıfırla</a> · <a href="#" id="btn-help">Kontroller</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ UÇUŞ HUD ============ -->
+<div id="hud" class="hidden">
+  <div class="hud-top">
+    <div id="h-clock">T- 00:00:10</div>
+    <div id="h-phase">Geri sayım</div>
+  </div>
+  <div id="banner"></div>
+  <div class="panel hud-left">
+    <div class="hl-title"><span id="h-name">—</span><span id="h-state"></span></div>
+    <div class="row"><label>İrtifa</label><b id="h-alt">0</b></div>
+    <div class="row"><label>Hız (yüzey)</label><b id="h-spd">0</b></div>
+    <div class="row"><label>Hız (yörünge)</label><b id="h-ospd">0</b></div>
+    <div class="row"><label>Dikey hız</label><b id="h-vz">0</b></div>
+    <div class="row"><label>Menzil</label><b id="h-dr">0</b></div>
+    <div class="row"><label>Apoapsis</label><b id="h-ap">—</b></div>
+    <div class="row"><label>Periapsis</label><b id="h-pe">—</b></div>
+    <div class="row"><label>Dinamik basınç</label><b id="h-q">0</b></div>
+    <div class="row"><label>İvme</label><b id="h-g">0</b></div>
+    <div class="row"><label>Yunuslama</label><b id="h-pitch">0°</b></div>
+    <div class="bar-row"><label>Gaz</label><div class="bar"><div id="h-thr"></div></div></div>
+    <div id="h-fuel"></div>
+    <div class="row small"><label>Kontrol</label><b id="h-ctrl">Otopilot</b></div>
+  </div>
+  <div class="panel hud-right">
+    <div class="hr-head">
+      <span>Zaman: <b id="h-warp">1×</b></span>
+      <span class="warp-btns"><button data-w="-1">◀</button><button data-w="1">▶</button></span>
+    </div>
+    <div id="h-cams" class="cams"></div>
+    <canvas id="profile" width="300" height="150"></canvas>
+    <div id="log"></div>
+  </div>
+  <div id="land-panel" class="panel land-panel hidden">
+    <div class="lp-title" id="lp-title">İNİŞ YANIŞI</div>
+    <div class="row"><label>Hedefe mesafe</label><b id="lp-dx">0 m</b></div>
+    <div class="row"><label>Durma irtifası</label><b id="lp-stop">—</b></div>
+    <div class="gauge"><div class="g-zone early">ERKEN</div><div class="g-zone ok">İDEAL</div><div class="g-zone late">GEÇ</div><div id="lp-needle"></div></div>
+    <div id="lp-hint" class="lp-hint">L — iniş yanışını ateşle</div>
+  </div>
+  <div class="hud-bottom" id="keys">
+    <span><kbd>Boşluk</kbd> kademe</span><span><kbd>T</kbd> otopilot</span><span><kbd>A</kbd>/<kbd>D</kbd> yönelim</span>
+    <span><kbd>W</kbd>/<kbd>S</kbd> gaz</span><span><kbd>V</kbd> kamera</span><span><kbd>M</kbd> harita</span>
+    <span><kbd>L</kbd> iniş yanışı</span><span><kbd>C</kbd> yakala</span><span><kbd>P</kbd> uyduları bırak</span>
+    <span><kbd>,</kbd>/<kbd>.</kbd> zaman</span><span><kbd>K</kbd> FTS</span><span><kbd>Esc</kbd> iptal</span>
+  </div>
+</div>
+
+<!-- ============ SONUÇ ============ -->
+<div id="result" class="screen hidden">
+  <div class="res-box">
+    <h1 id="res-title">GÖREV BAŞARILI</h1>
+    <p id="res-sub" class="muted"></p>
+    <div id="res-lines" class="res-lines"></div>
+    <button id="btn-back" class="big-btn">Hangara dön</button>
+  </div>
+</div>
+
+<div id="help" class="screen hidden">
+  <div class="res-box help-box">
+    <h1>Nasıl oynanır?</h1>
+    <p>Amacın Starlink tipi uyduları yörüngeye taşıyarak dünyanın tamamına internet sağlamak. Falcon 1 ile başla, kazandığın parayla
+      Falcon 9, Falcon Heavy ve Starship'in kilidini aç. Boosterları kurtarırsan bir sonraki fırlatma çok daha ucuza gelir.</p>
+    <ul>
+      <li><b>Yükseliş:</b> Otopilot gravite dönüşünü uçar. Kapatırsan <kbd>A</kbd>/<kbd>D</kbd> ile yunuslama, <kbd>W</kbd>/<kbd>S</kbd> ile gaz verirsin. Max-Q sırasında hücum açısını büyük tutarsan roket parçalanır!</li>
+      <li><b>Kademe ayrılması:</b> Booster kurtarma yakıtına ulaşınca motorlar susar ve kademe otomatik ayrılır (<kbd>Boşluk</kbd> ile erken ayırabilirsin).</li>
+      <li><b>İniş:</b> Booster geri dönüş, giriş yanışı ve ızgara kanatçıklarıyla hedefe süzülür. Göstergede ibre <b>İDEAL</b> bölgeye girince <kbd>L</kbd> ile iniş yanışını başlat. Geç kalırsan booster çarpar, erken yakarsan yakıt biter.</li>
+      <li><b>Starship yakalama:</b> Super Heavy kollara yaklaşıp yavaşlayınca <kbd>C</kbd> ile "chopstick" kollarını kapat.</li>
+      <li><b>Yörünge:</b> Periapsis 160 km'yi geçince yörüngedesin. <kbd>P</kbd> ile uyduları bırak (otomatik de bırakılır).</li>
+      <li><b>Kamera:</b> Fare sürükle = döndür, tekerlek = yakınlaş, <kbd>V</kbd> = araçlar arası geçiş, <kbd>M</kbd> = harita görünümü. <kbd>,</kbd> <kbd>.</kbd> zaman hızlandırma.</li>
+    </ul>
+    <button id="btn-help-close" class="big-btn">Tamam</button>
+  </div>
+</div>
+
+<div id="loading" class="screen"><div class="load-box"><div class="spinner"></div><div id="load-text">Dünya oluşturuluyor…</div></div></div>
+
+<script src="js/sim.js"></script>
+<script type="module">
+  // Three.js CDN'den yüklenir; oyun kodu klasik script olarak eklenir (file:// ile de çalışsın diye)
+  import * as THREE from 'three';
+  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+  window.THREE = THREE; window.RoomEnvironment = RoomEnvironment;
+  const s = document.createElement('script'); s.src = 'js/game.js'; document.body.appendChild(s);
+</script>
+</body>
+</html>
