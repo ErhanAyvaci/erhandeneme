@@ -29,13 +29,17 @@
   const scene = new T.Scene();
   const camera = new T.PerspectiveCamera(55, innerWidth / innerHeight, 0.3, 5e9);
   const pmrem = new T.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new window.RoomEnvironment(), 0.04).texture;
+  const envDay = pmrem.fromScene(new window.RoomEnvironment(), 0.04).texture;
+  const envNightScene = new window.RoomEnvironment();
+  envNightScene.traverse(o => { if (o.material) { const m = o.material; if (m.emissive) m.emissiveIntensity = (m.emissiveIntensity || 1) * 0.03; if (m.color) m.color.multiplyScalar(0.05); } });
+  const envNight = pmrem.fromScene(envNightScene, 0.04).texture;
+  scene.environment = envDay;
   // ışıma (bloom) son işleme
   let composer = null, bloom = null;
   try {
     composer = new window.EffectComposer(renderer);
     composer.addPass(new window.RenderPass(scene, camera));
-    bloom = new window.UnrealBloomPass(new T.Vector2(innerWidth / 2, innerHeight / 2), 0.6, 0.45, 0.85);
+    bloom = new window.UnrealBloomPass(new T.Vector2(innerWidth / 2, innerHeight / 2), 0.5, 0.45, 0.97);
     composer.addPass(bloom);
     composer.addPass(new window.OutputPass());
   } catch (e) { composer = null; }
@@ -50,10 +54,10 @@
   scene.add(hemi);
   const flashLight = new T.PointLight(0xff9040, 0, 0, 1.2);
   scene.add(flashLight);
-  const engineLight = new T.PointLight(0xffa860, 0, 0, 1.6);
+  const engineLight = new T.PointLight(0xffa860, 0, 0, 2);
   scene.add(engineLight);
   const padLights = [];
-  for (let i = 0; i < 3; i++) { const l = new T.PointLight(0xfff0d8, 0, 900, 1.4); scene.add(l); padLights.push(l); }
+  for (let i = 0; i < 3; i++) { const l = new T.PointLight(0xfff0d8, 0, 400, 2); scene.add(l); padLights.push(l); }
 
   addEventListener('resize', () => {
     renderer.setSize(innerWidth, innerHeight);
@@ -204,7 +208,7 @@
       fragmentShader: `#include <common>
         #include <logdepthbuf_pars_fragment>
         uniform vec3 sun; varying vec3 vN; varying vec3 vV; varying vec3 vWN;
-        void main(){ float f = 1.0 - abs(dot(vN, vV)); float i = pow(f, 5.0) * 0.9;
+        void main(){ float f = 1.0 - abs(dot(vN, vV)); float i = pow(f, 6.0) * 0.6;
           float day = clamp(dot(vWN, sun)*1.3+0.3, 0.0, 1.0);
           vec3 col = mix(vec3(0.25,0.5,1.0), vec3(0.6,0.82,1.0), f)*day;
           gl_FragColor = vec4(col*i*1.6, i);
@@ -346,7 +350,7 @@
       g.setAttribute('color', new T.BufferAttribute(this.col, 4).setUsage(T.DynamicDrawUsage));
       this.geo = g;
       this.mat = new T.ShaderMaterial({
-        uniforms: { scale: { value: innerHeight / (2 * Math.tan(55 * Math.PI / 360)) } },
+        uniforms: { scale: { value: innerHeight / (2 * Math.tan(55 * Math.PI / 360)) }, tint: { value: new T.Color(1, 1, 1) } },
         vertexShader: `#include <common>
           #include <logdepthbuf_pars_vertex>
           attribute float size; attribute vec4 color; varying vec4 vC; uniform float scale;
@@ -356,10 +360,10 @@
           }`,
         fragmentShader: `#include <common>
           #include <logdepthbuf_pars_fragment>
-          varying vec4 vC;
+          varying vec4 vC; uniform vec3 tint;
           void main(){ vec2 c = gl_PointCoord-0.5; float d = length(c)*2.0; if(d>1.0) discard;
             float a = (1.0-d*d); a *= a;
-            ${additive ? 'gl_FragColor = vec4(vC.rgb*vC.a*a, 1.0);' : 'gl_FragColor = vec4(vC.rgb, vC.a*a);'}
+            ${additive ? 'gl_FragColor = vec4(vC.rgb*vC.a*a, 1.0);' : 'gl_FragColor = vec4(vC.rgb*tint, vC.a*a);'}
             #include <logdepthbuf_fragment>
           }`,
         transparent: true, depthWrite: false,
@@ -612,7 +616,7 @@
     // motor ışığı (geceleri zemini aydınlatır)
     if (bestPos) {
       engineLight.color.set(bestCol);
-      engineLight.intensity = Math.min(4e6, 2.5e6 * bestThr) * (night ? 1 : 0.25);
+      engineLight.intensity = Math.min(60000, 9000 * bestThr) * (night ? 1 : 0.2);
       engineLight.position.set(bestPos[0] - F.x, bestPos[1] - F.y, -F.z);
     } else engineLight.intensity = 0;
     // yakalama kolları
@@ -650,8 +654,9 @@
           rnd(0.15, 0.4), 3 * big, 9 * big, [1, 0.85, 0.5], [1, 0.3, 0.05], 0.8, 0, 2, 0);
       }
     }
-    // duman izi (atmosferde)
-    if (rr > 0.002) {
+    // duman izi (atmosferde) — iniş yanışında çok daha az
+    const desc = c.rec && c.vUp() < 0;
+    if (rr > 0.002 && !(desc && Math.random() < 0.8)) {
       const ns = Math.min(5, Math.ceil(thr * rr * 3 * dt * 60 + Math.random() * 0.6));
       for (let i = 0; i < ns; i++) {
         const sp = rnd(30, 90), k = Math.random();
@@ -919,9 +924,8 @@
       const pos = localVec(r.lat, r.lon);
       if (r.cov < 0.02 && !r.station) continue;
       const col = r.served > 0.4 ? 0x3ee08f : 0xffc24a;
-      const disc = new T.Mesh(new T.CircleGeometry(RE * r.r * D2R, 48), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.08 + 0.22 * Math.max(r.served, r.cov * 0.3), depthWrite: false, side: T.DoubleSide }));
-      disc.position.copy(pos).multiplyScalar(RE + 9000);
-      disc.lookAt(pos.clone().multiplyScalar(RE * 2));
+      const disc = new T.Mesh(new T.SphereGeometry(RE + 12000, 40, 6, 0, Math.PI * 2, 0, r.r * D2R), new T.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.1 + 0.25 * Math.max(r.served, r.cov * 0.3), depthWrite: false }));
+      disc.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), pos);
       netLayer.add(disc);
       if (r.station) {
         const s = new T.Mesh(new T.SphereGeometry(90000, 12, 8), new T.MeshBasicMaterial({ color: 0x4fc3ff }));
@@ -1185,7 +1189,9 @@
       const s = sunLight.shadow.camera; s.left = -ext; s.right = ext; s.top = ext; s.bottom = -ext; s.near = 1; s.far = 1400; s.updateProjectionMatrix();
     }
     hemi.intensity = (0.08 + 0.45 * day) * (0.4 + 0.6 * clamp(1 - hc / 50000, 0, 1)) + (mode === 'hangar' ? 0.3 : 0);
-    renderer.toneMappingExposure = mode === 'hangar' ? 1.1 : lerp(1.35, 1.05, day);
+    renderer.toneMappingExposure = mode === 'hangar' ? 1.1 : lerp(1.15, 1.05, day);
+    scene.environment = (mode === 'hangar' || day > 0.3 || hc > 60000) ? envDay : envNight;
+    if (smokeP) { const k = 0.12 + 0.88 * day; smokeP.mat.uniforms.tint.value.setRGB(k, k, k * 1.05); }
     return { hc, day };
   }
 
@@ -1221,7 +1227,7 @@
       if (!L || !night) { padLights[i].intensity = 0; continue; }
       const v = new T.Vector3(L.pos[0], L.pos[1], L.pos[2]).applyMatrix4(grp.matrixWorld);
       padLights[i].position.copy(v);
-      padLights[i].intensity = 2.2e5 * (1 - sky.day);
+      padLights[i].intensity = 5000 * (1 - sky.day);
     }
   }
 
@@ -1307,7 +1313,7 @@
       case 'boostbackEnd': log(nm + ': geri dönüş yanışı bitti'); break;
       case 'entryBurn': log(nm + ': giriş yanışı başladı'); break;
       case 'entryBurnEnd': log(nm + ': giriş yanışı bitti'); break;
-      case 'deorbit': log('Ship: yörüngeden çıkış yanışı'); banner('YÖRÜNGEDEN ÇIKIŞ'); break;
+      case 'deorbit': log('Ship: yörüngeden çıkış yanışı'); banner('YÖRÜNGEDEN ÇIKIŞ'); for (const s0 of sats3d) s0.g.parent && s0.g.parent.remove(s0.g); sats3d = []; break;
       case 'deorbitEnd': log('Ship atmosfere giriyor — ısı kalkanı önde'); break;
       case 'flip': log('Ship: dikey konuma çevrilme manevrası'); banner('ÇEVRİLME MANEVRASI'); break;
       case 'final':
@@ -1627,7 +1633,7 @@
     const sky = updateSky();
     updateStatics(sky);
     if (mode === 'flight') updateHUD(dtReal);
-    if (bloom) bloom.strength = mode === 'hangar' ? 0.35 : 0.6;
+    if (bloom) bloom.strength = mode === "hangar" ? 0.3 : 0.5;
     if (composer) composer.render(); else renderer.render(scene, camera);
   }
 

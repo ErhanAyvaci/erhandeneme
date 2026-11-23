@@ -614,7 +614,7 @@
       this.deployed = true;
       this.satsDeployed = this.satsPlanned;
       c.extraMass = 0;
-      this.deployT = this.t;
+      this.deployT = this.t; this.deployOrbit = c.orbit();
       this.emit('deploy', { craft: c, n: this.satsPlanned, kind: this.payloadKind });
       if (this.opts.shipReturn && this.key === 'ss') {
         c.rec = { kind: 'shipcatch', target: 350, boost: false, entryBurn: false };
@@ -751,7 +751,7 @@
             }
             c.burnRatio = clamp(1 - c.stop80 / Math.max(50, hEff), 0, 2);
             const auto = this.autoLand || c.id !== this.focusId;
-            if (auto && c.stop80 <= (c.ship ? 650 : 40) && hEff < 7000) { c.burnLit = true; this.emit('landingBurn', { craft: c }); if (c.ship) this.emit('flip', { craft: c }); }
+            if (auto && c.stop80 <= (c.ship ? 1100 : 40) && hEff < 7000) { c.burnLit = true; this.emit('landingBurn', { craft: c }); if (c.ship) this.emit('flip', { craft: c }); }
           }
           if (c.burnLit && b.prop > 0) {
             // gerekirse 3 motorla başla, sonra tek motora düş
@@ -771,7 +771,7 @@
             if (hEff < 7) aH = clamp(-0.06 * dx - 1.5 * vh, -0.1 * aT, 0.1 * aT);
             aV = Math.max(0.2, aV);
             let thr = Math.hypot(aV, aH) / aT;
-            if (thr < minThrL * 0.5 && hEff > 30) { b.firing = false; } else { b.firing = true; thr = clamp(thr, minThrL, 1); }
+            if (thr < minThrL * 0.5 && (hEff > 30 || vz > 0.5)) { b.firing = false; } else { b.firing = true; thr = clamp(thr, minThrL, 1); }
             c.throttle = thr * LF;
             if (c.ship && Math.abs(wrapPi(c.dir - c.dirCmd)) > 12 * DEG) c.throttle = minThrL * LF; // çevrilme sırasında
             const u = c.up(), e = c.east();
@@ -802,7 +802,7 @@
       if (c.caught || !c.alive) return;
       const hEff = c.alt() - 40;
       const dx = c.downrange() - c.rec.target;
-      const ok = hEff < 14 && hEff > -9 && Math.abs(c.vUp()) < 4.5 && Math.abs(dx) < 10 && c.burnLit;
+      const ok = hEff < 14 && hEff > -14 && Math.abs(c.vUp()) < 5 && Math.abs(dx) < 10 && c.burnLit;
       c.catchReady = ok;
       const auto = this.autoLand || c.id !== this.focusId;
       if (ok && (manual || (auto && hEff < 3))) {
@@ -902,7 +902,7 @@
       this.result = {
         ok, partial: !!this.partial, sats: ok ? this.satsDeployed : 0, kind: this.payloadKind,
         recovered: recs.ok, lost: recs.lost, reason: ok ? null : (this.failReason || this.failUpper || 'Görev başarısız'),
-        orbit: ok ? this.stack.orbit() : null, t: this.t,
+        orbit: ok ? (this.deployOrbit || this.stack.orbit()) : null, t: this.t,
         boosters: cr.filter(c => c.rec && !c.ship).map(c => ({ name: c.name, type: c.type, side: c.side, kind: c.rec.kind, result: c.landed && !c.splashed ? 'landed' : c.caught ? 'caught' : c.splashed ? 'splash' : 'lost' })),
         expended: cr.filter(c => c.state === 'expended').length,
         ship: this.opts.shipReturn ? (this.stack.caught ? 'caught' : 'lost') : null,
