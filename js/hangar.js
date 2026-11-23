@@ -135,7 +135,7 @@ window.HANGAR = (function () {
     h += `<label class="chk"><input type="checkbox" id="o-voice" ${st.opts.voice !== false ? 'checked' : ''}> Sesli geri sayım ve anonslar</label>`;
     h += `<label class="chk"><input type="checkbox" id="o-bc" ${st.opts.broadcast !== false ? 'checked' : ''}> Canlı yayın telemetri şeridi</label>`;
     const q = st.opts.quality || 'high';
-    h += `<div class="chk">Grafik kalitesi: ${['low', 'med', 'high'].map(k => `<button class="btn ${q === k ? 'good' : ''}" data-q="${k}" style="padding:3px 9px">${{ low: 'Düşük', med: 'Orta', high: 'Yüksek' }[k]}</button>`).join(' ')} <label style="margin-left:8px"><input type="checkbox" id="o-snd" ${st.opts.muted ? '' : 'checked'}> Ses</label></div>`;
+    h += `<div class="chk">Grafik kalitesi: ${['low', 'med', 'high', 'ultra'].map(k => `<button class="btn ${q === k ? 'good' : ''}" data-q="${k}" style="padding:3px 9px">${{ low: 'Düşük', med: 'Orta', high: 'Yüksek', ultra: 'Ultra' }[k]}</button>`).join(' ')} <label style="margin-left:8px"><input type="checkbox" id="o-snd" ${st.opts.muted ? '' : 'checked'}> Ses</label></div>`;
     const w = plan.weather;
     h += '<div class="row2"><div><h3>Hava durumu — ' + (plan.site === 'starbase' ? 'Starbase' : 'Cape Canaveral') + '</h3>';
     h += `<div class="wx"><div>🕑 ${String(w.hour).padStart(2, '0')}:00 ${w.hour < 6 || w.hour >= 19 ? '(gece)' : ''}</div><div>💨 Yer ${w.wind} m/s</div><div>🌀 Jet ${w.jet} m/s</div><div>🌊 Dalga ${w.waves} m</div><div>${w.storm ? '⛈ Fırtına' : w.rain ? '🌧 Yağmur' : w.fog ? '🌫 Sis' : '☁'} %${w.cloud}</div></div>`;

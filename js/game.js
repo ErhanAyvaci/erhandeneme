@@ -46,9 +46,10 @@
 
   /* ================= GRAFİK KALİTESİ ================= */
   const QUALITY = {
-    low: { pr: 1, shadows: false, bloom: false, part: 0.45, name: 'Düşük' },
-    med: { pr: Math.min(window.devicePixelRatio || 1, 1.5), shadows: true, bloom: true, part: 0.75, name: 'Orta' },
-    high: { pr: Math.min(window.devicePixelRatio || 1, 2), shadows: true, bloom: true, part: 1, name: 'Yüksek' },
+    low: { pr: 1, shadows: false, bloom: false, part: 0.45, vol: 0, lens: false, name: 'Düşük' },
+    med: { pr: Math.min(window.devicePixelRatio || 1, 1.25), shadows: true, bloom: true, part: 0.75, vol: 10, lens: true, name: 'Orta' },
+    high: { pr: Math.min(window.devicePixelRatio || 1, 1.75), shadows: true, bloom: true, part: 1, vol: 18, lens: true, name: 'Yüksek' },
+    ultra: { pr: Math.min(window.devicePixelRatio || 1, 2), shadows: true, bloom: true, part: 1, vol: 32, lens: true, name: 'Ultra' },
   };
   let QUAL = QUALITY.high;
   function applyQuality(q) {
@@ -238,7 +239,7 @@
       fragmentShader: `#include <common>
         #include <logdepthbuf_pars_fragment>
         uniform vec3 sun; varying vec3 vN; varying vec3 vV; varying vec3 vWN;
-        void main(){ float f = 1.0 - abs(dot(vN, vV)); float i = pow(f, 6.0) * 0.6;
+        void main(){ float f = 1.0 - abs(dot(vN, vV)); float i = pow(f, 6.0) * 0.6 + pow(f, 30.0) * 1.3;
           float day = clamp(dot(vWN, sun)*1.3+0.3, 0.0, 1.0);
           vec3 col = mix(vec3(0.25,0.5,1.0), vec3(0.6,0.82,1.0), f)*day;
           gl_FragColor = vec4(col*i*1.6, i);
@@ -272,8 +273,8 @@
 
   /* --- Yerel yüzey parçası (eğrisel kapak) --- */
   function capGeometry(radius, rings, segs, colorFn) {
-    const pos = [], col = [], idx = [];
-    pos.push(0, 0, 0); const c0 = colorFn(0, 0, 0); col.push(c0[0] ** 2.2, c0[1] ** 2.2, c0[2] ** 2.2);
+    const pos = [], col = [], idx = [], wat = [];
+    pos.push(0, 0, 0); const c0 = colorFn(0, 0, 0); col.push(c0[0] ** 2.2, c0[1] ** 2.2, c0[2] ** 2.2); wat.push(c0[3] || 0);
     for (let i = 1; i <= rings; i++) {
       const s = radius * Math.pow(i / rings, 2.3);
       const a = s / RE;
@@ -282,7 +283,7 @@
         const e = Math.sin(a) * RE * Math.cos(ph), n = Math.sin(a) * RE * Math.sin(ph);
         pos.push(e, RE * Math.cos(a) - RE, n);
         const c = colorFn(s * Math.cos(ph), s * Math.sin(ph), s);
-        col.push(c[0] ** 2.2, c[1] ** 2.2, c[2] ** 2.2);
+        col.push(c[0] ** 2.2, c[1] ** 2.2, c[2] ** 2.2); wat.push(c[3] || 0);
       }
     }
     for (let j = 0; j < segs; j++) idx.push(0, 1 + (j + 1) % segs, 1 + j);
@@ -293,6 +294,7 @@
     const g = new T.BufferGeometry();
     g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
     g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+    g.setAttribute('water', new T.Float32BufferAttribute(wat, 1));
     g.setIndex(idx); g.computeVertexNormals();
     return g;
   }
@@ -380,10 +382,12 @@
         else if (sc.d > 600 && vnoise(e / 3000, north / 3000, 6.6) > 0.7) c = [c[0] * 0.75, c[1] * 0.9, c[2] * 0.7];
       }
       if (far) { const w = clamp((s - 30000) / 50000, 0, 1); c = [lerp(c[0], far[0], w), lerp(c[1], far[1], w), lerp(c[2], far[2], w)]; }
+      if (sc.k === 1 && sc.d < 90) { const f = 1 - sc.d / 90; c = [lerp(c[0], 0.7, f * 0.6), lerp(c[1], 0.76, f * 0.6), lerp(c[2], 0.76, f * 0.6)]; }
+      c[3] = sc.k > 0 && s < 30000 ? 1 : 0;
       return c;
     };
   }
-  const oceanColor = (e, n) => { const nz = vnoise(e / 700, n / 700, 5.5); return [0.03 + nz * 0.02, 0.1 + nz * 0.04, 0.2 + nz * 0.05]; };
+  const oceanColor = (e, n) => { const nz = vnoise(e / 700, n / 700, 5.5); return [0.03 + nz * 0.02, 0.1 + nz * 0.04, 0.2 + nz * 0.05, 1]; };
   const waveNormal = MD.canvasTex(256, 256, (g, w, h) => {
     const img = g.createImageData(w, h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -406,6 +410,7 @@
     siteCap.receiveShadow = true; scene.add(siteCap);
     shipCap = new T.Mesh(capGeometry(90000, 80, 120, oceanColor), new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.28, metalness: 0.15, normalMap: waveNormal, normalScale: new T.Vector2(0.4, 0.4) }));
     shipCap.visible = false; shipCap.receiveShadow = true; scene.add(shipCap);
+    patchLand(siteCap.material); patchOcean(shipCap.material); shipCap.material.roughness = 0.18;
     falconPad = MD.falconPad(); scene.add(falconPad.g);
     for (const d of [1100, 1400, 1700]) { const g = MD.landingZone(); g.userData.d = d; lzPads.push(g); scene.add(g); }
     starTower = MD.mechazilla(98, true); scene.add(starTower.g);
@@ -539,9 +544,10 @@
     const isR = type === 'raptor';
     const outer = new T.Mesh(plumeGeo, plumeMaterial(isR ? 0xc9b8ff : 0xfff1c0, isR ? 0x6a4cff : 0xff7a1a, isR ? 0.75 : 0.9));
     const core = new T.Mesh(plumeGeo, plumeMaterial(0xffffff, isR ? 0xa98cff : 0xffc060, 1.0));
-    outer.renderOrder = core.renderOrder = 4;
-    g.add(outer, core);
-    g.userData = { r, len, outer, core, isR };
+    const halo = new T.Mesh(plumeGeo, plumeMaterial(isR ? 0x9a8cff : 0xffc080, isR ? 0x3a2c9f : 0x9a4a10, 0.35));
+    outer.renderOrder = core.renderOrder = 4; halo.renderOrder = 3;
+    g.add(outer, core, halo);
+    g.userData = { r, len, outer, core, halo, isR };
     g.visible = false;
     return g;
   }
@@ -555,6 +561,11 @@
     u.outer.scale.set(W, L, W);
     u.core.scale.set(u.r * 0.55, L * 0.42, u.r * 0.55);
     for (const m of [u.outer, u.core]) { m.material.uniforms.uTime.value = time; m.material.uniforms.uI.value = clamp(0.4 + 0.6 * thr, 0, 1) * (1 - vac * 0.35); m.material.uniforms.uVac.value = vac; }
+    if (u.halo) {
+      const hv = clamp((vac - 0.55) / 0.45, 0, 1);
+      u.halo.visible = hv > 0.02;
+      if (u.halo.visible) { u.halo.scale.set(W * (2.5 + 3 * hv), L * (1.2 + 0.8 * hv), W * (2.5 + 3 * hv)); const hu = u.halo.material.uniforms; hu.uTime.value = time; hu.uI.value = thr * hv * 0.8; hu.uVac.value = 1; }
+    }
   }
 
 
@@ -568,6 +579,11 @@
     pv.plume = makePlume(pv.engineType, pv.plumeR, pv.plumeL);
     return pv;
   }
+  function tintFlown(g, flights) {
+    const k = Math.min(1, flights / 6);
+    const burnt = MD.M.copper.clone(); burnt.color.setHex(0x8a5a3c).lerp(new T.Color(0x3a3340), 0.35 + 0.5 * k); burnt.roughness = 0.5;
+    g.traverse(o => { if (o.isMesh && o.material === MD.M.copper) o.material = burnt; });
+  }
   function buildMissionVisuals(m, ctx) {
     const d = m.def, st = d.stages, P0 = ctx.plan;
     const fl = id => (ctx.flights && ctx.flights[id]) || 0;
@@ -580,6 +596,7 @@
         if (d.key === 'ss') p.vis = withPlume(MD.superHeavy(st[0], { flights }));
         else p.vis = withPlume(MD.falconBooster(st[0], { flights, fins: m.mode !== 'exp' || d.key !== 'f1', legs: m.mode === 'rtls' || m.mode === 'asds' || (d.key === 'f1' && m.mode !== 'exp'), titanium: ti }));
         if (core) p.vis.serial = core.id;
+        if (flights > 0) tintFlown(p.vis.g, flights);
       } else if (p.role === 'upper') {
         p.vis = withPlume(d.key === 'ss' ? MD.ship(st[1], { flights: P0.ship ? P0.ship.flights : 0 }) : MD.falconUpper(st[1], d.key === 'f1'));
       } else if (p.role === 'sideL' || p.role === 'sideR') {
@@ -646,6 +663,7 @@
   }
   const layoutKeyOf = c => c.parts.map(p => p.role).join(',') + (mission.fairingDone ? 'F' : '') + (mission.deployed ? 'D' : '');
 
+  const _orangeC = new T.Color(0xff7a2a);
   function syncVisuals(dtReal, time) {
     const m = mission; if (!m) return;
     const ids = new Set();
@@ -656,11 +674,13 @@
       const v = craftGroup(c);
       if (v.layoutKey !== layoutKeyOf(c)) layoutCraft(v);
       v.g.visible = c.alive;
-      if (!c.alive) continue;
+      if (!c.alive) { if (v.sheath) v.sheath.visible = false; continue; }
       const e = toEF(c.x, c.y);
       v.ef = e;
       placeAt(v.g, e[0], e[1], 0);
-      v.g.rotation.set(0, 0, c.dir + efRot() - Math.PI / 2);
+      // inmiş/yakalanmış araçlar Dünya ile birlikte döner: yerel dikeyde kalsın
+      if ((c.landed && !c.splashed) || c.caught) v.g.rotation.set(0, 0, Math.atan2(e[1], e[0]) - Math.PI / 2);
+      else v.g.rotation.set(0, 0, c.dir + efRot() - Math.PI / 2);
       if (c.caught) {
         v.settle = Math.min(1, (v.settle || 0) + dtReal * 0.6);
         const s = v.settle;
@@ -698,7 +718,9 @@
         if (pv.legs && pv.legs.length) {
           const tgt = c.legsOut ? 1 : 0;
           pv.legT = lerp(pv.legT || 0, tgt, Math.min(1, dtReal * 1.4));
-          for (const l of pv.legs) l.rotation.z = -pv.legT * 108 * Math.PI / 180;
+          if (c.landed && !c.splashed) pv.legComp = Math.min(1, (pv.legComp || 0) + dtReal * 2.2);
+          const bounce = pv.legComp ? Math.sin(pv.legComp * Math.PI) * 4 * (1 - pv.legComp * 0.5) : 0;
+          for (const l of pv.legs) l.rotation.z = -(pv.legT * 108 + bounce) * Math.PI / 180;
         }
         if (pv.flaps && c.ship) {
           const act = c.state === 'reentry' || (c.state === 'final' && !c.burnLit);
@@ -713,19 +735,23 @@
         }
       }
       if (c.heat > 6e7 && c.alive && !c.landed) emitPlasma(c, v, dtReal);
+      updateSheath(c, v, time);
+      condensation(c, v, dtReal);
       if (v.fairing && c.chute && !v.chute) { v.chute = MD.parachute(); v.chute.position.y = 4; v.g.add(v.chute); }
       if (v.chute) { v.chute.rotation.z = -v.g.rotation.z + (c.upAng() + efRot()) - Math.PI / 2; }
       let tr = trails.get(c.id);
       if (!tr) { tr = { pts: [], last: -1e9, name: c.name, type: c.type }; trails.set(c.id, tr); }
       if (m.t - tr.last > 1) { tr.last = m.t; tr.pts.push([c.downrange(), Math.max(0, h), e[0], e[1]]); if (tr.pts.length > 4000) tr.pts.shift(); }
     }
-    for (const [id, v] of vis) if (!ids.has(id)) { scene.remove(v.g); vis.delete(id); }
+    for (const [id, v] of vis) if (!ids.has(id)) { scene.remove(v.g); if (v.sheath) scene.remove(v.sheath); vis.delete(id); }
     // motor ışığı (geceleri zemini aydınlatır)
     if (bestPos) {
       engineLight.color.set(bestCol);
-      engineLight.intensity = Math.min(60000, 9000 * bestThr) * (night ? 1 : 0.2);
+      const nearG = clamp(1 - (Math.hypot(bestPos[0], bestPos[1]) - RE) / 600, 0, 1);
+      engineLight.intensity = Math.min(60000, 9000 * bestThr) * (night ? 1 : 0.2 + 0.35 * nearG);
+      hemi.groundColor.setHex(0x2a2a22).lerp(_orangeC, Math.min(1, bestThr) * nearG * 0.7);
       engineLight.position.set(bestPos[0] - F.x, bestPos[1] - F.y, -F.z);
-    } else engineLight.intensity = 0;
+    } else { engineLight.intensity = 0; hemi.groundColor.setHex(0x2a2a22); }
     // yakalama kolları
     const armAnim = (tw, kind) => {
       if (!tw) return;
@@ -776,15 +802,15 @@
     }
     jellyfish(c, v, thr, h, dt);
     // kalkış buharı
-    if (h < 160 && c.type === 'stack') {
-      const n = Math.ceil(dt * 60 * 4 * thr);
+    if (h < 400 && c.type === 'stack') {
+      const n = Math.ceil(dt * 60 * (h < 160 ? 7 : 2.5) * thr);
       const surf = surfacePoint(0, 1), up = [Math.cos(surf[2]), Math.sin(surf[2])], east = [up[1], -up[0]];
       for (let i = 0; i < n; i++) {
         const ang = Math.random() * Math.PI * 2, sp = rnd(25, 70) * big;
         const dx = Math.cos(ang), dz = Math.sin(ang);
         smokeP.spawn(surf[0] + east[0] * dx * 8 * big, surf[1] + east[1] * dx * 8 * big, dz * 8 * big,
           east[0] * dx * sp + up[0] * rnd(2, 12), east[1] * dx * sp + up[1] * rnd(2, 12), dz * sp,
-          rnd(7, 14), 10 * big, rnd(50, 90) * big, [0.95, 0.95, 0.95], [0.82, 0.82, 0.84], 0.75, 0, 0.35, 0);
+          rnd(10, 22), 10 * big, rnd(70, 140) * big, [0.95, 0.95, 0.95], [0.82, 0.82, 0.84], 0.75, 0, 0.28, -0.3);
       }
     }
     // iniş tozu / buharı
@@ -808,6 +834,7 @@
     // öndeki uç: hareket yönüne bakan uç
     const lead = c.ship && c.state !== 'final' ? null : ((ax[0] * fx + ax[1] * fy) > 0 ? c.length : 0);
     const big = mission.key === 'ss' ? 2.5 : 1;
+    if (Math.random() < dt * 30 * k) fireP.spawn(e[0] + ax[0] * c.length * 0.5, e[1] + ax[1] * c.length * 0.5, 0, 0, 0, 0, rnd(3, 6), 6 * big, 34 * big, [0.95, 0.4, 0.85], [0.35, 0.1, 0.3], 0.16 * k, 0, 0.2, 0);
     const n = Math.ceil(k * 6 * dt * 60);
     for (let i = 0; i < n; i++) {
       const L0 = lead === null ? Math.random() * c.length : lead;
@@ -1324,6 +1351,8 @@
     tmpC.lerp(cTw, tw * 0.45 * (1 - clamp(hc / 30000, 0, 1)));
     tmpC.lerp(cNight, 1 - day);
     tmpC.lerp(cNight, clamp((hc - 25000) / 45000, 0, 1));
+    const skyInfo = updateSkyDome(cw, hc);
+    if (skyInfo) tmpC.copy(skyInfo.horizon).multiplyScalar(0.85);
     scene.background = tmpC.clone();
     if (hc < 40000 && mode !== 'hangar') {
       if (!scene.fog) scene.fog = new T.FogExp2(tmpC.clone(), 0);
@@ -1355,7 +1384,7 @@
     renderer.toneMappingExposure = mode === 'hangar' ? 1.1 : lerp(1.15, 1.05, day);
     scene.environment = (mode === 'hangar' || day > 0.3 || hc > 60000) ? envDay : envNight;
     if (smokeP) { const k = 0.12 + 0.88 * day; smokeP.mat.uniforms.tint.value.setRGB(k, k, k * 1.05); }
-    return { hc, day };
+    return { hc, day, info: skyInfo };
   }
 
   function updateStatics(sky) {
@@ -1363,6 +1392,7 @@
     const lowCam = sky && sky.hc < 45000;
     const ss = mission ? mission.key === 'ss' : P.state.sel.rocket === 'ss';
     placeSurface(siteCap, 0, 0); siteCap.visible = inFlight && lowCam;
+    for (const k of ['cape', 'starbase']) { const g = siteDetail[k] || (inFlight && curSite === k ? buildSiteDetail(k) : null); if (!g) continue; g.visible = inFlight && lowCam && curSite === k && sky.hc < 30000; if (g.visible) placeSurface(g, 0, 0); }
     placeSurface(falconPad.g, 0, 0); falconPad.g.visible = inFlight && !ss;
     for (const g of lzPads) { placeSurface(g, g.userData.d, 0); g.visible = inFlight && !ss; }
     placeSurface(starTower.g, 0, 0); starTower.g.visible = inFlight && ss;
@@ -1374,6 +1404,7 @@
       const ph = mission.t * 2 * Math.PI / 9;
       droneShipV.g.translateY(mission.waves * 0.5 * Math.sin(ph));
       droneShipV.g.rotateX(Math.sin(ph * 0.7) * mission.waves * 0.006);
+      if (mission.waves > 1 && lowCam && Math.random() < mission.waves * 0.08) { const d0 = mission.shipD + rnd(-45, 45), p0 = surfacePoint(d0, 1), sd = Math.random() < 0.5 ? -1 : 1; smokeP.spawn(p0[0], p0[1], sd * 27, 0, rnd(2, 6), sd * rnd(2, 6), rnd(1, 2.2), 2, 9, [0.95, 0.97, 1], [0.9, 0.92, 0.95], 0.55, 0, 0.6, 6); }
       placeSurface(shipCap, mission.shipD, -0.6);
       // Octagrabber: inişten sonra booster'ın altına girip sabitler
       const lb = P.has('k_octa') && mission.crafts.find(c => c.rec && c.rec.kind === 'asds' && c.landed && !c.tipped && c.alive);
@@ -1429,7 +1460,8 @@
     const P0 = ctx.plan;
     setSite(ctx.site);
     sunHour = ctx.hour + 0.5; sunWeek = ctx.week;
-    vis.forEach(v => scene.remove(v.g)); vis.clear();
+    vis.forEach(v => { scene.remove(v.g); if (v.sheath) scene.remove(v.sheath); }); vis.clear(); clearTrain();
+    if (PL.scene) { PL.scene.traverse(o => { if (o.geometry) o.geometry.dispose(); }); PL.scene = null; PL.st = null; $('planet').classList.add('hidden'); }
     mission = new S.Mission(P0.rocket, Object.assign({}, ctx.simOpts));
     mission.autoDeploy = false;
     mission.on(onEvent);
@@ -1480,8 +1512,8 @@
     const autoCam = P.state.opts.cinematic;
     switch (type) {
       case 'ignition': log('Motor ateşlemesi'); break;
-      case 'liftoff': log('KALKIŞ!', 'good'); banner('KALKIŞ', 'good'); voice.say('Kalkış!', true); if (autoCam) { cam.mode = 'ground'; cam.autoGround = true; } if (ctxCur && ctxCur.padDamage) setTimeout(padDamageFX, 1200); break;
-      case 'maxq': log('Max-Q — en yüksek aerodinamik yük (' + (d.q / 1000).toFixed(1) + ' kPa)'); banner('MAX-Q'); voice.say('Maks Q'); if (cam.mode === 'ground') cam.mode = 'chase'; break;
+      case 'liftoff': log('KALKIŞ!', 'good'); banner('KALKIŞ', 'good'); voice.say('Kalkış!', true); if (cam.mode === 'ground' || Math.random() < 0.3) dropsT = cam.mode === 'ground' ? 1 : 0.5; shake = Math.max(shake, 0.6); if (autoCam) { cam.mode = 'ground'; cam.autoGround = true; } if (ctxCur && ctxCur.padDamage) setTimeout(padDamageFX, 1200); break;
+      case 'maxq': log('Max-Q — en yüksek aerodinamik yük (' + (d.q / 1000).toFixed(1) + ' kPa)'); banner('MAX-Q'); voice.say('Maks Q'); shake = Math.max(shake, 0.45); if (cam.mode === 'ground') cam.mode = 'chase'; break;
       case 'meco': log('MECO — ana motorlar sustu'); banner('MECO'); voice.say('Ana motorlar kapandı'); break;
       case 'hotstage': log('Sıcak kademe ayrılması — Ship motorları ateşlendi'); banner('SICAK AYRILMA'); break;
       case 'sideSep': log('Yan boosterlar ayrıldı (BECO)'); banner('YAN BOOSTER AYRILMASI'); puffs(c, 'side'); break;
@@ -1494,7 +1526,7 @@
       case 'orbit': banner(d.partial ? 'DÜŞÜK YÖRÜNGE' : 'YÖRÜNGEYE ULAŞILDI', d.partial ? 'bad' : 'good'); log('YÖRÜNGEDEYİZ!', 'good'); voice.say(d.partial ? 'Düşük yörünge' : 'Yörüngeye ulaştık'); break;
       case 'deploy': {
         const txt = d.kind === 'starlink' ? d.n + ' uydu yörüngeye bırakıldı' : d.kind === 'dragon' ? 'Dragon ayrıldı — istasyona yöneliyor' : 'Yük ayrıldı';
-        log(txt, 'good'); banner(txt.toUpperCase(), 'good'); deploySatsFX(c, d.kind); break;
+        log(txt, 'good'); banner(txt.toUpperCase(), 'good'); deploySatsFX(c, d.kind); if (d.kind === 'starlink') startTrain(d.n); break;
       }
       case 'engineOut': log(d.total ? 'MOTOR ARIZASI — itki kaybı!' : `${d.n} motor arızası — kalan motorlarla devam`, 'bad'); banner('MOTOR ARIZASI', 'bad'); engineOutFX(c); break;
       case 'gridfins': log(nm + ': ızgara kanatçıkları açıldı'); break;
@@ -1603,7 +1635,7 @@
       case 'KeyX': m.cmd('throttleSet', 0); break;
       case 'KeyV': cycleFocus(1); break;
       case 'KeyB': cycleFocus(-1); break;
-      case 'KeyN': { const i = (CAM_MODES.indexOf(cam.mode) + 1) % CAM_MODES.length; cam.mode = CAM_MODES[i]; banner(CAM_NAMES[cam.mode]); break; }
+      case 'KeyN': { const i = (CAM_MODES.indexOf(cam.mode) + 1) % CAM_MODES.length; cam.mode = CAM_MODES[i]; banner(CAM_NAMES[cam.mode]); if (cam.mode === 'ground' || cam.mode === 'tracker') focusBlur = 1; break; }
       case 'KeyM': cam.map = !cam.map; break;
       case 'KeyI': pipOn = !pipOn; banner(pipOn ? 'BÖLÜNMÜŞ EKRAN AÇIK' : 'BÖLÜNMÜŞ EKRAN KAPALI'); break;
       case 'KeyH': $('keys').classList.toggle('hidden'); break;
@@ -1688,7 +1720,7 @@
   }
   function backToHangar() {
     $('result').classList.add('hidden'); $('hud').classList.add('hidden'); $('hangar').classList.remove('hidden'); $('touch').classList.add('hidden');
-    vis.forEach(v => scene.remove(v.g)); vis.clear();
+    vis.forEach(v => { scene.remove(v.g); if (v.sheath) scene.remove(v.sheath); }); vis.clear(); clearTrain();
     for (const d of debris) scene.remove(d.mesh); debris = [];
     for (const s of sats3d) s.g.parent && s.g.parent.remove(s.g); sats3d = [];
     mission = null; ctxCur = null; mode = 'hangar'; cam.map = false; warp = 1; cam.mode = 'chase';
@@ -1852,7 +1884,7 @@
     wxCtx.clearRect(0, 0, W, H);
     if (!inFlight) { cloudDeck.visible = false; return; }
     const base = cloudBase(w), cover = clamp(w.cloud / 100, 0, 1) * (w.storm ? 1.1 : 1);
-    cloudDeck.visible = cover > 0.12 && sky.hc < 120000;
+    cloudDeck.visible = !QUAL.vol && cover > 0.12 && sky.hc < 120000;
     placeSurface(cloudDeck, 0, base);
     const u = cloudDeck.material.uniforms;
     u.cover.value = cover * 0.85; u.light.value = 0.1 + 0.95 * sky.day + wxFlash * 2; u.dark.value = w.storm ? 0.8 : w.rain ? 0.5 : 0.1;
@@ -2028,7 +2060,9 @@
     pipCam.lookAt(cx, cy, -F.z);
     pipCam.aspect = R0.w / R0.h; pipCam.updateProjectionMatrix();
     const low = c.alt() < 45000;
-    const capVis = siteCap.visible, shVis = shipCap.visible, fog = scene.fog;
+    const capVis = siteCap.visible, shVis = shipCap.visible, fog = scene.fog, skyVis = skyDome.visible, vcVis = volClouds ? volClouds.visible : false;
+    if (volClouds) volClouds.visible = false;
+    if (c.alt() > 50000) skyDome.visible = false; else skyDome.position.copy(pipCam.position);
     if (low) { siteCap.visible = true; if (mission.shipD !== undefined) shipCap.visible = true; }
     scene.fog = null;
     const yb = innerHeight - R0.y - R0.h;
@@ -2038,7 +2072,7 @@
     renderer.render(scene, pipCam);
     renderer.autoClear = ac;
     renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
-    siteCap.visible = capVis; shipCap.visible = shVis; scene.fog = fog;
+    siteCap.visible = capVis; shipCap.visible = shVis; scene.fog = fog; skyDome.visible = skyVis; skyDome.position.copy(camera.position); if (volClouds) volClouds.visible = vcVis;
     fr.classList.remove('hidden'); lb.classList.remove('hidden');
     Object.assign(fr.style, { left: R0.x + 'px', top: yb + 'px', width: R0.w + 'px', height: R0.h + 'px', right: 'auto', bottom: 'auto' });
     Object.assign(lb.style, { left: (R0.x + 6) + 'px', top: (yb + 6) + 'px' });
@@ -2193,7 +2227,7 @@
 
   /* ================= AY / MARS İNİŞ SAHNESİ ================= */
   const PL = { scene: null, cam: new T.PerspectiveCamera(50, 1, 0.5, 2e6), st: null };
-  function planetTexture(kind) {
+  function planetTexture(kind, rep) {
     return MD.canvasTex(1024, 1024, (g, w, h) => {
       const moon = kind === 'moon';
       g.fillStyle = moon ? '#8d8d8d' : '#a4532d'; g.fillRect(0, 0, w, h);
@@ -2210,34 +2244,60 @@
         gr.addColorStop(0, moon ? 'rgba(40,40,40,0.55)' : 'rgba(60,20,8,0.45)'); gr.addColorStop(0.8, moon ? 'rgba(90,90,90,0.25)' : 'rgba(120,50,20,0.2)'); gr.addColorStop(0.95, moon ? 'rgba(200,200,200,0.18)' : 'rgba(230,150,100,0.15)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
         g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
       }
-    }, { repeat: [24, 24] });
+    }, { repeat: [rep || 24, rep || 24] });
   }
   function startPlanet(kind, r) {
     const moon = kind === 'moon';
     const sc = new T.Scene();
     sc.background = new T.Color(moon ? 0x000000 : 0xc89a72);
-    if (!moon) sc.fog = new T.Fog(0xc89a72, 4000, 60000);
+    const storm = !moon && Math.random() < 0.45;
+    if (!moon) sc.fog = new T.Fog(0xcf9a72, storm ? 600 : 4000, storm ? 7000 : 60000);
+    if (!moon) {
+      const skyM = new T.ShaderMaterial({ uniforms: { st: { value: storm ? 1 : 0 } }, vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: 'uniform float st; varying vec3 vD; void main(){ float u = max(vD.y, 0.0); vec3 hz = vec3(0.86, 0.62, 0.46), zn = vec3(0.52, 0.34, 0.27); vec3 c = mix(hz, zn, pow(u, 0.55)); c = mix(c, vec3(0.8, 0.6, 0.45), st * 0.7); gl_FragColor = vec4(c, 1.0); }',
+        side: T.BackSide, depthWrite: false, fog: false });
+      const dome = new T.Mesh(new T.SphereGeometry(200000, 32, 16), skyM); dome.renderOrder = -10; sc.add(dome);
+    }
     sc.environment = envDay;
-    const sun = new T.DirectionalLight(0xffffff, moon ? 3.4 : 2.4); sun.position.set(-400, 300, 200); sc.add(sun);
+    const sun = new T.DirectionalLight(0xffffff, moon ? 3.6 : 2.2); sun.position.set(-400, 260, 200); sc.add(sun); sc.add(sun.target);
+    sun.castShadow = !!QUAL.shadows; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0005;
+    const sc0 = sun.shadow.camera; sc0.left = -160; sc0.right = 160; sc0.top = 160; sc0.bottom = -160; sc0.near = 1; sc0.far = 2000;
     sc.add(new T.HemisphereLight(moon ? 0x404850 : 0xe0b090, 0x201510, moon ? 0.15 : 0.6));
     const tex = planetTexture(kind);
-    const ground = new T.Mesh(new T.PlaneGeometry(120000, 120000, 1, 1), new T.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 }));
-    ground.rotation.x = -Math.PI / 2; sc.add(ground);
+    // yükseklik haritalı arazi (krater çanakları ve kenarları; iniş alanı düz)
+    const craters = [];
+    for (let i = 0; i < (moon ? 140 : 45); i++) { const R = Math.pow(Math.random(), 2.2) * (moon ? 420 : 300) + 18, x = rnd(-6500, 6500), z = rnd(-6500, 6500); if (Math.hypot(x, z) < R + 260) continue; craters.push([x, z, R]); }
+    const terr = (x, z) => {
+      let h = (vnoise(x / 320, z / 320, 7) - 0.5) * (moon ? 26 : 18) + (vnoise(x / 60, z / 60, 8) - 0.5) * 3.5;
+      if (!moon) h += Math.sin(x / 85 + vnoise(x / 400, z / 400, 2) * 6) * 2.2 * vnoise(x / 900, z / 900, 3);
+      for (const [cx, cz, R] of craters) { const d = Math.hypot(x - cx, z - cz); if (d > R * 1.6) continue; const q = d / R; h += q < 1 ? -R * 0.2 * (1 - q * q) : 0; h += R * 0.07 * Math.exp(-(((d - R) / (R * 0.18)) ** 2)); }
+      const rr = Math.hypot(x, z);
+      return h * clamp((rr - 90) / 260, 0, 1) - Math.max(0, rr - 5500) * 0.06;
+    };
+    const tg = new T.PlaneGeometry(14000, 14000, 300, 300); tg.rotateX(-Math.PI / 2);
+    const tp = tg.attributes.position;
+    for (let i = 0; i < tp.count; i++) tp.setY(i, terr(tp.getX(i), tp.getZ(i)));
+    tg.computeVertexNormals();
+    const tmat = new T.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0 });
+    const ground = new T.Mesh(tg, tmat); ground.receiveShadow = true; sc.add(ground);
+    const outer = new T.Mesh(new T.PlaneGeometry(240000, 240000, 1, 1), tmat); outer.rotation.x = -Math.PI / 2; outer.position.y = -90; sc.add(outer);
     // kayalar
     const rockM = new T.MeshStandardMaterial({ color: moon ? 0x777777 : 0x7a3a20, roughness: 1, flatShading: true });
-    for (let i = 0; i < 160; i++) { const s0 = Math.pow(Math.random(), 2) * 4 + 0.4; const rk = new T.Mesh(new T.DodecahedronGeometry(s0, 0), rockM); rk.position.set(rnd(-600, 600), s0 * 0.3, rnd(-600, 600)); rk.rotation.set(rnd(0, 3), rnd(0, 3), 0); sc.add(rk); }
+    for (let i = 0; i < 160; i++) { const s0 = Math.pow(Math.random(), 2) * 4 + 0.4; const rk = new T.Mesh(new T.DodecahedronGeometry(s0, 0), rockM); const rx = rnd(-700, 700), rz = rnd(-700, 700); if (Math.hypot(rx, rz) < 60) continue; rk.position.set(rx, terr(rx, rz) + s0 * 0.3, rz); rk.rotation.set(rnd(0, 3), rnd(0, 3), 0); rk.castShadow = rk.receiveShadow = true; sc.add(rk); }
     if (moon) { const stars0 = new T.Points(new T.BufferGeometry().setAttribute('position', new T.Float32BufferAttribute(Array.from({ length: 3000 }, () => rnd(-1, 1) * 9e5), 3)), new T.PointsMaterial({ color: 0xffffff, size: 1.2, sizeAttenuation: false })); sc.add(stars0); const earthB = new T.Mesh(new T.SphereGeometry(18000, 32, 16), new T.MeshBasicMaterial({ map: loadTex('day', true) })); earthB.position.set(200000, 160000, -500000); sc.add(earthB); }
     // hedef işareti
     const pad = new T.Mesh(new T.RingGeometry(18, 22, 48), new T.MeshBasicMaterial({ color: 0x3ee08f, transparent: true, opacity: 0.7, side: T.DoubleSide })); pad.rotation.x = -Math.PI / 2; pad.position.y = 0.2; sc.add(pad);
     const shipV = MD.ship(S.ROCKETS.ss.stages[1], { flights: 1 });
     const plume = makePlume('raptor', 2.2, 30); plume.position.y = shipV.plumeY || -2; shipV.g.add(plume);
+    shipV.g.traverse(o => { if (o.isMesh) { o.castShadow = true; if (o.material && o.material.metalness > 0.8) { o.material = o.material.clone(); o.material.metalness = 0.55; o.material.roughness = 0.35; } } });
     sc.add(shipV.g);
     const dust = new Particles(2500, false); scene.remove(dust.pts); sc.add(dust.pts);
     const g = moon ? 1.62 : 3.71;
     PL.scene = sc;
-    PL.st = { kind, r, g, x: moon ? -1600 : -2600, h: moon ? 2600 : 4200, vx: moon ? 55 : 120, vz: moon ? -45 : -110, ang: 0, thr: 0, fuel: 1, auto: true, ship: shipV, plume, dust, done: false, t: 0, msg: null, pad };
+    PL.st = { kind, r, g, x: moon ? -1600 : -2600, h: moon ? 2600 : 4200, vx: moon ? 55 : 120, vz: moon ? -45 : -110, ang: 0, thr: 0, fuel: 1, auto: true, ship: shipV, plume, dust, done: false, t: 0, msg: null, pad, terr, sun, storm };
+    if (storm) setTimeout(() => banner('TOZ FIRTINASI — görüş düşük', 'bad'), 1500);
     mode = 'planet'; warp = 1;
-    $('hud').classList.add('hidden'); $('planet').classList.remove('hidden'); $('bcast').classList.add('hidden');
+    $('hud').classList.add('hidden'); $('hangar').classList.add('hidden'); $('planet').classList.remove('hidden'); $('bcast').classList.add('hidden');
     $('pl-title').textContent = moon ? '🌕 AY İNİŞİ' : '🔴 MARS İNİŞİ';
     banner(moon ? 'AY YÜZEYİNE ALÇALMA' : 'MARS ATMOSFERİNE GİRİŞ', 'good');
     voice.say(moon ? 'Ay yüzeyine alçalma başladı.' : 'Mars inişi başladı.');
@@ -2248,11 +2308,12 @@
     s.t += dt;
     const moon = s.kind === 'moon';
     const amax = s.g * 3.2;
+    const gh = s.terr(s.x, 0), hr = s.h - gh;
     if (s.auto) {
       // basit otomatik iniş: yatay hızı sıfırla, dikey hızı irtifaya göre ayarla
       const tgtVx = clamp(-s.x * 0.05, -40, 40);
       s.ang = clamp((s.vx - tgtVx) * 0.03, -0.45, 0.45);
-      const tgtVz = -Math.max(1.5, Math.min(60, s.h * 0.09));
+      const tgtVz = -Math.max(1.5, Math.min(60, hr * 0.09));
       const need = (tgtVz - s.vz) * 1.2 + s.g;
       s.thr = clamp(need / (amax * Math.cos(s.ang)), 0, 1);
     } else {
@@ -2269,8 +2330,8 @@
     s.vx += (-Math.sin(s.ang) * a - drag * s.vx * Math.abs(s.vx)) * dt;
     s.vz += (Math.cos(s.ang) * a - s.g - drag * s.vz * Math.abs(s.vz) * Math.sign(1)) * dt;
     s.x += s.vx * dt; s.h += s.vz * dt;
-    if (s.h <= 0) {
-      s.h = 0; s.done = true;
+    if (s.h <= gh) {
+      s.h = gh; s.done = true;
       const ok = Math.abs(s.vz) < 3.5 && Math.abs(s.vx) < 2.5 && Math.abs(s.ang) < 0.18;
       s.ok = ok;
       if (ok) { banner(moon ? 'AY\'A İNDİK! 🌕' : 'MARS\'A İNDİK! 🔴', 'good'); voice.say(moon ? 'İniş başarılı. Ay yüzeyindeyiz.' : 'İniş başarılı. Mars yüzeyindeyiz.', true); s.thr = 0; }
@@ -2278,31 +2339,36 @@
       setTimeout(() => endPlanet(ok), 4500);
     }
     // toz
-    if (a > 0 && s.h < 80) {
-      const n = Math.ceil(dt * 120 * s.thr * (1 - s.h / 80));
+    if (a > 0 && hr < 80) {
+      const n = Math.ceil(dt * 120 * s.thr * (1 - hr / 80));
       const col = moon ? [0.6, 0.6, 0.6] : [0.7, 0.42, 0.28];
-      for (let i = 0; i < n; i++) { const th = Math.random() * 6.28, sp = rnd(20, 70) * (moon ? 1.5 : 1); s.dust.spawn(s.x, 1, 0, Math.cos(th) * sp, rnd(1, 6), Math.sin(th) * sp, moon ? rnd(1.5, 3) : rnd(3, 7), 3, 26, col, col, 0.55, 0, moon ? 0.1 : 0.6, moon ? s.g : 0.5); }
+      for (let i = 0; i < n; i++) { const th = Math.random() * 6.28, sp = rnd(20, 70) * (moon ? 1.5 : 1); s.dust.spawn(s.x, gh + 1, 0, Math.cos(th) * sp, rnd(1, 6), Math.sin(th) * sp, moon ? rnd(1.5, 3) : rnd(3, 7), 3, 26, col, col, 0.55, 0, moon ? 0.1 : 0.6, moon ? s.g : 0.5); }
     }
   }
   function renderPlanet(dtReal) {
     const s = PL.st; if (!s) return;
     if (!paused) { let k = Math.min(dtReal, 0.05) * warp; while (k > 0) { const d = Math.min(k, 0.02); stepPlanet(d); k -= d; } }
     const sh = s.ship;
-    sh.g.position.set(s.x, s.h + 0.5, 0); sh.g.rotation.z = s.ang;
-    updatePlume(s.plume, s.done && s.ok ? 0 : s.thr, s.kind === 'moon' ? 0 : 600, time);
+    sh.g.position.set(s.x, s.h + 0.5, 0); sh.g.rotation.set(0, 0.35, s.ang, 'ZYX');
+    updatePlume(s.plume, s.done && s.ok ? 0 : s.thr, s.kind === 'moon' ? 0 : 0.006, time);
     if (sh.flaps) for (const f of sh.flaps) f.rotation.x = 0;
+    // gölge kamerası gemiyi takip eder
+    s.sun.position.set(s.x - 400, s.h + 260, 200); s.sun.target.position.set(s.x, s.h, 0);
+    // Mars toz fırtınası: kameranın etrafında savrulan toz
+    if (s.storm && !paused) for (let i = 0; i < 6; i++) s.dust.spawn(PL.cam.position.x + rnd(-150, 150), PL.cam.position.y + rnd(-80, 60), PL.cam.position.z + rnd(-250, 50), rnd(25, 45), rnd(-2, 2), rnd(-3, 3), rnd(3, 6), 4, 30, [0.78, 0.55, 0.4], [0.7, 0.5, 0.38], 0.35, 0, 0, 0);
     const F0 = F.clone(); F.set(0, 0, 0);
     s.dust.mat.uniforms.scale.value = innerHeight / (2 * Math.tan(PL.cam.fov * Math.PI / 360));
     s.dust.update(Math.min(dtReal, 0.05));
     F.copy(F0);
-    const d = clamp(90 + s.h * 0.12, 90, 900);
+    const gh0 = s.terr(s.x, 0);
+    const d = clamp(90 + (s.h - gh0) * 0.12, 90, 900);
     PL.cam.position.set(s.x + d * 0.55, s.h + 30 + d * 0.18, d * 0.85);
     PL.cam.lookAt(s.x, s.h + 20, 0);
     PL.cam.aspect = innerWidth / innerHeight; PL.cam.updateProjectionMatrix();
     renderer.toneMappingExposure = 1.05;
     renderer.render(PL.scene, PL.cam);
-    $('pl-alt').textContent = s.h.toFixed(0) + ' m';
-    $('pl-vz').textContent = s.vz.toFixed(1) + ' m/s'; $('pl-vz').style.color = s.h < 200 && s.vz < -6 ? 'var(--bad)' : '';
+    $('pl-alt').textContent = (s.h - gh0).toFixed(0) + ' m';
+    $('pl-vz').textContent = s.vz.toFixed(1) + ' m/s'; $('pl-vz').style.color = s.h - gh0 < 200 && s.vz < -6 ? 'var(--bad)' : '';
     $('pl-vx').textContent = s.vx.toFixed(1) + ' m/s';
     $('pl-fuel').textContent = '%' + (s.fuel * 100).toFixed(0);
     $('pl-thr').style.width = (s.thr * 100) + '%';
@@ -2319,6 +2385,601 @@
     finishMission(r);
   }
 
+  /* ================= GÖRSEL PAKET 2 ================= */
+  const NOISE_GLSL = `
+    float h3(vec3 p){ p = fract(p*0.3183099+0.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+    float n3(vec3 x){ vec3 i = floor(x), f = fract(x); f = f*f*(3.0-2.0*f);
+      return mix(mix(mix(h3(i), h3(i+vec3(1,0,0)), f.x), mix(h3(i+vec3(0,1,0)), h3(i+vec3(1,1,0)), f.x), f.y),
+                 mix(mix(h3(i+vec3(0,0,1)), h3(i+vec3(1,0,1)), f.x), mix(h3(i+vec3(0,1,1)), h3(i+vec3(1,1,1)), f.x), f.y), f.z); }
+    float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float vn2(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
+      return mix(mix(h2(i), h2(i+vec2(1.0,0.0)), f.x), mix(h2(i+vec2(0.0,1.0)), h2(i+vec2(1.0,1.0)), f.x), f.y); }`;
+  const SKY_GLSL = `
+    vec3 skyCol(float mu, float c, float smu, float hk){
+      float day = smoothstep(-0.2, 0.08, smu);
+      float am = 1.0 / (max(mu, 0.0) * 1.8 + 0.09);
+      float sam = 1.0 / (max(smu + 0.02, 0.0) * 1.8 + 0.07);
+      vec3 beta = vec3(0.11, 0.26, 0.62);
+      vec3 sunT = exp(-beta * sam * 0.35);
+      vec3 ray = (1.0 - exp(-beta * am * 0.55 * (1.0 - hk * 0.85))) / (1.0 + am * 0.12) * sunT;
+      vec3 col = ray * 0.75 * (1.0 + c * c) * 3.9;
+      float cp = max(c, 0.0);
+      col += sunT * (0.05 * pow(cp, 6.0) + 0.25 * pow(cp, 60.0)) * (1.0 - exp(-am * 0.15)) * 2.0;
+      col *= day;
+      float belt = exp(-pow((smu + 0.04) * 9.0, 2.0)) * exp(-max(mu, 0.0) * 5.0);
+      col += vec3(0.9, 0.42, 0.2) * belt * (0.25 + 0.6 * cp) * 0.5;
+      col *= mix(1.0, exp(-max(mu, 0.0) * 6.0) * 0.6 + 0.02, hk);
+      return col + vec3(0.002, 0.003, 0.007);
+    }`;
+  // aynı fonksiyonun JS kopyası (sis rengi ve bulut ortam ışığı için)
+  function skyColJS(mu, c, smu, hk, out) {
+    const sm = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+    const day = sm(-0.2, 0.08, smu);
+    const am = 1 / (Math.max(mu, 0) * 1.8 + 0.09), sam = 1 / (Math.max(smu + 0.02, 0) * 1.8 + 0.07);
+    const beta = [0.11, 0.26, 0.62], cp = Math.max(c, 0);
+    const belt = Math.exp(-(((smu + 0.04) * 9) ** 2)) * Math.exp(-Math.max(mu, 0) * 5);
+    const hf = lerp(1, Math.exp(-Math.max(mu, 0) * 6) * 0.6 + 0.02, hk);
+    const bc = [0.9, 0.42, 0.2], base = [0.002, 0.003, 0.007];
+    const r = [];
+    for (let i = 0; i < 3; i++) {
+      const sunT = Math.exp(-beta[i] * sam * 0.35);
+      let v = (1 - Math.exp(-beta[i] * am * 0.55 * (1 - hk * 0.85))) / (1 + am * 0.12) * sunT * 0.75 * (1 + c * c) * 3.9;
+      v += sunT * (0.05 * cp ** 6 + 0.25 * cp ** 60) * (1 - Math.exp(-am * 0.15)) * 2;
+      v *= day; v += bc[i] * belt * (0.25 + 0.6 * cp) * 0.5; v *= hf; r.push(v + base[i]);
+    }
+    return (out || new T.Color()).setRGB(r[0], r[1], r[2]);
+  }
+  function sunTransJS(smu, out) {
+    const sam = 1 / (Math.max(smu + 0.02, 0) * 1.8 + 0.07), b = [0.11, 0.26, 0.62];
+    return out.setRGB(Math.exp(-b[0] * sam * 0.35), Math.exp(-b[1] * sam * 0.35), Math.exp(-b[2] * sam * 0.35));
+  }
+
+  /* --- 1. Atmosfer saçılmalı gökyüzü --- */
+  const skyDome = (() => {
+    const m = new T.Mesh(new T.SphereGeometry(1, 64, 32), new T.ShaderMaterial({
+      uniforms: { sunDir: { value: SUN }, upDir: { value: new T.Vector3(0, 1, 0) }, hk: { value: 0 }, dip: { value: 0 } },
+      vertexShader: `#include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying vec3 vDir;
+        void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: `#include <common>
+        #include <logdepthbuf_pars_fragment>
+        uniform vec3 sunDir; uniform vec3 upDir; uniform float hk; uniform float dip; varying vec3 vDir;
+        ${SKY_GLSL}
+        void main(){ vec3 v = normalize(vDir);
+          float mu = dot(v, upDir) + dip; float smu = dot(sunDir, upDir); float c = dot(v, sunDir);
+          vec3 col = skyCol(mu, c, smu, hk);
+          gl_FragColor = vec4(col, 1.0);
+          #include <logdepthbuf_fragment>
+        }`,
+      side: T.BackSide, depthWrite: false, fog: false,
+    }));
+    m.renderOrder = -100; m.frustumCulled = false; m.scale.setScalar(2e8);
+    scene.add(m);
+    return m;
+  })();
+  const _sc = new T.Color(), _sc2 = new T.Color();
+  function updateSkyDome(cw, hc) {
+    const vis = mode === 'flight' && !cam.map && hc < 160000;
+    skyDome.visible = vis;
+    if (!vis) return null;
+    const up = cw.clone().normalize();
+    const u = skyDome.material.uniforms;
+    u.upDir.value.copy(up);
+    u.hk.value = clamp(hc / 70000, 0, 1);
+    u.dip.value = Math.sin(Math.acos(RE / (RE + Math.max(0, hc)))) * 0.9;
+    skyDome.position.copy(camera.position);
+    const smu = SUN.dot(up);
+    skyColJS(0.03 + u.dip.value, 0, smu, u.hk.value, _sc);
+    return { smu, horizon: _sc, up };
+  }
+
+  /* --- 2. Hacimli bulutlar --- */
+  let volClouds = null, volSteps = -1;
+  function makeVolClouds(steps) {
+    const mat = new T.ShaderMaterial({
+      defines: { STEPS: steps },
+      uniforms: {
+        camL: { value: new T.Vector3() }, sunL: { value: new T.Vector3(0, 1, 0) }, thick: { value: 1500 }, cover: { value: 0.4 }, off: { value: new T.Vector2() },
+        sunC: { value: new T.Color(1, 1, 1) }, ambC: { value: new T.Color(0.4, 0.5, 0.7) }, dark: { value: 0 }, hole: { value: new T.Vector2() }, holeR: { value: 0 },
+        glowP: { value: new T.Vector3() }, glowC: { value: new T.Color(1, 0.5, 0.2) }, glowI: { value: 0 }, flashP: { value: new T.Vector3() }, flashI: { value: 0 }, densK: { value: 1 / 140 },
+      },
+      vertexShader: `#include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying vec3 vL; uniform float thick;
+        void main(){ vL = position * vec3(1.0, thick, 1.0); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: `#include <common>
+        #include <logdepthbuf_pars_fragment>
+        uniform vec3 camL; uniform vec3 sunL; uniform float thick; uniform float cover; uniform vec2 off; uniform vec3 sunC; uniform vec3 ambC; uniform float dark;
+        uniform vec2 hole; uniform float holeR; uniform vec3 glowP; uniform vec3 glowC; uniform float glowI; uniform vec3 flashP; uniform float flashI; uniform float densK;
+        varying vec3 vL;
+        ${NOISE_GLSL}
+        float fbm(vec3 p){ float a = 0.0, w = 0.5; for (int k = 0; k < 4; k++) { a += w * n3(p); p = p * 2.03 + vec3(1.7, 9.2, 3.1); w *= 0.5; } return a; }
+        float dens(vec3 p){
+          float hn = p.y / thick + 0.5;
+          if (hn < 0.0 || hn > 1.0) return 0.0;
+          float prof = smoothstep(0.0, 0.1, hn) * smoothstep(1.0, 0.3, hn);
+          vec3 q = vec3(p.x + off.x, p.y * 1.7, p.z + off.y) / 2300.0;
+          float b = n3(q * 0.3) * 0.55 + fbm(q) * 0.6;
+          float d = (b - (1.12 - cover)) * 3.2 * prof;
+          d *= 1.0 - smoothstep(20000.0, 29000.0, length(p.xz));
+          if (holeR > 0.0) d *= smoothstep(holeR * 0.45, holeR, length(p.xz - hole));
+          return max(d, 0.0);
+        }
+        void main(){
+          vec3 ro = camL, rd = normalize(vL - camL);
+          float hb = thick * 0.5;
+          if (abs(rd.y) < 1e-5) rd.y = 1e-5;
+          float ta = (-hb - ro.y) / rd.y, tb = (hb - ro.y) / rd.y;
+          float t0 = max(min(ta, tb), 0.0), t1 = min(max(ta, tb), t0 + 36000.0);
+          if (t1 <= t0) discard;
+          float dt = (t1 - t0) / float(STEPS);
+          float t = t0 + dt * h2(gl_FragCoord.xy);
+          float Tr = 1.0; vec3 acc = vec3(0.0);
+          float cs = dot(rd, sunL); float ph = 0.55 + 0.45 * (0.25 * (1.0 + cs * cs) + 1.6 * pow(max(cs, 0.0), 8.0));
+          for (int i = 0; i < STEPS; i++) {
+            vec3 p = ro + rd * t;
+            float d = dens(p);
+            if (d > 0.002) {
+              float ls = dens(p + sunL * 180.0) + dens(p + sunL * 520.0) * 0.8;
+              float Lt = exp(-ls * 2.6) * (1.0 - exp(-d * 4.0) * 0.6);
+              float hn = p.y / thick + 0.5;
+              vec3 c = sunC * Lt * ph * 1.7 + ambC * (0.35 + 0.65 * hn);
+              c *= 1.0 - dark * 0.7;
+              if (glowI > 0.0) { vec3 gd = p - glowP; c += glowC * glowI / (1.0 + dot(gd, gd) / 9.0e5); }
+              if (flashI > 0.0) { vec3 fd = p - flashP; c += vec3(0.8, 0.85, 1.0) * flashI * 6.0 / (1.0 + dot(fd, fd) / 4.0e6); }
+              float a = 1.0 - exp(-d * densK * dt);
+              acc += Tr * a * c; Tr *= 1.0 - a;
+              if (Tr < 0.03) break;
+            }
+            t += dt;
+          }
+          float alpha = 1.0 - Tr;
+          if (alpha < 0.004) discard;
+          gl_FragColor = vec4(acc / alpha, alpha);
+          #include <logdepthbuf_fragment>
+        }`,
+      transparent: true, depthWrite: false, side: T.FrontSide,
+    });
+    const m = new T.Mesh(new T.BoxGeometry(60000, 1, 60000), mat);
+    m.renderOrder = 4; m.frustumCulled = false; m.visible = false;
+    scene.add(m);
+    return m;
+  }
+  const _v3 = new T.Vector3(), _q = new T.Quaternion();
+  function updateVolClouds(dtReal, sky, skyInfo) {
+    const w = wxState();
+    const steps = QUAL.vol || 0;
+    if (steps !== volSteps) { if (volClouds) { scene.remove(volClouds); volClouds.material.dispose(); } volClouds = steps ? makeVolClouds(steps) : null; volSteps = steps; }
+    if (!volClouds) return false;
+    const inFlight = mode === 'flight' && !cam.map && w;
+    const cover = w ? clamp(w.cloud / 100, 0, 1) * (w.storm ? 1.15 : 1) : 0;
+    volClouds.visible = !!inFlight && cover > 0.12 && sky.hc < 90000;
+    if (!volClouds.visible) return true;
+    const base = cloudBase(w), thick = w.storm ? 4200 : w.rain ? 2600 : 1500;
+    volClouds.scale.y = thick;
+    placeSurface(volClouds, 0, base + thick / 2);
+    volClouds.updateMatrixWorld();
+    const u = volClouds.material.uniforms;
+    u.thick.value = thick; u.cover.value = cover * 0.92; u.dark.value = w.storm ? 0.75 : w.rain ? 0.45 : 0.05;
+    u.off.value.x += dtReal * (w.wind || 3) * 0.8;
+    const loc = volClouds.worldToLocal(_v3.copy(camera.position)); loc.y *= thick; u.camL.value.copy(loc);
+    _q.copy(volClouds.quaternion).invert();
+    u.sunL.value.copy(SUN).applyQuaternion(_q).normalize();
+    const inside = Math.abs(loc.y) < thick / 2 && Math.abs(loc.x) < 30000 && Math.abs(loc.z) < 30000;
+    volClouds.material.side = inside ? T.BackSide : T.FrontSide;
+    volClouds.material.depthTest = !inside;
+    const smu = skyInfo ? skyInfo.smu : 0.5;
+    sunTransJS(smu, u.sunC.value).multiplyScalar(clamp((smu + 0.08) / 0.2, 0, 1));
+    skyColJS(0.7, 0, smu, 0, u.ambC.value).multiplyScalar(0.9);
+    // roketin bulutta açtığı delik
+    const m = mission;
+    if (m && m.stack && !m.cloudHole) { const s = m.stack; if (s.alive && s.alt() > base) m.cloudHole = { ef: toEF(s.x, s.y), t: m.t, big: m.key === 'ss' ? 2.2 : 1 }; }
+    if (m && m.cloudHole) {
+      const H0 = m.cloudHole;
+      const hl = volClouds.worldToLocal(_v3.set(H0.ef[0] - F.x, H0.ef[1] - F.y, -F.z));
+      u.hole.value.set(hl.x - u.off.value.x * 0, hl.z); u.holeR.value = Math.min(700, 60 + (m.t - H0.t) * 9) * H0.big;
+    } else u.holeR.value = 0;
+    // motor parıltısı (gece bulutları alttan aydınlatır)
+    u.glowI.value = 0;
+    if (m) for (const c of m.crafts) {
+      if (!c.alive || !c.firingParts().length) continue;
+      const h = c.alt(); if (h > base + thick + 4000 || h < 0) continue;
+      const e = toEF(c.x, c.y);
+      const gl = volClouds.worldToLocal(_v3.set(e[0] - F.x, e[1] - F.y, -F.z)); gl.y *= thick;
+      u.glowP.value.copy(gl); u.glowC.value.set(m.key === 'ss' ? 0xc8a0ff : 0xffa050);
+      u.glowI.value = c.throttle * (m.key === 'ss' ? 9 : 4) * (1.2 - sky.day);
+      break;
+    }
+    if (wxFlash > 0.97) u.flashP.value.set(rnd(-12000, 12000), rnd(-0.3, 0.3) * thick, rnd(-12000, 12000));
+    u.flashI.value = wxFlash;
+    return true;
+  }
+
+  /* --- 3. Okyanus (Gerstner dalgaları, köpük, güneş yansıması) --- */
+  const oceanU = { uTime: { value: 0 }, uAmp: { value: 0.5 } };
+  function patchOcean(mat) {
+    mat.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, oceanU);
+      sh.vertexShader = 'uniform float uTime; uniform float uAmp; varying float vWaveH; varying vec2 vXZ;\n' + sh.vertexShader
+        .replace('#include <beginnormal_vertex>', `
+          vec3 wOff = vec3(0.0); float wdx = 0.0, wdz = 0.0;
+          { vec2 xz = position.xz; float att = 1.0 - smoothstep(2500.0, 9000.0, length(xz));
+            vec2 D[4]; D[0] = normalize(vec2(1.0, 0.2)); D[1] = normalize(vec2(0.7, 0.7)); D[2] = normalize(vec2(0.2, -1.0)); D[3] = normalize(vec2(-0.6, 0.8));
+            float LL[4]; LL[0] = 70.0; LL[1] = 38.0; LL[2] = 21.0; LL[3] = 11.0;
+            float AA[4]; AA[0] = 0.5; AA[1] = 0.28; AA[2] = 0.15; AA[3] = 0.07;
+            for (int i = 0; i < 4; i++) { float k = 6.2831 / LL[i], w = sqrt(9.81 * k), A = AA[i] * uAmp * att;
+              float ph = k * dot(D[i], xz) - w * uTime; float cph = cos(ph);
+              wOff.xz += 0.6 * A * D[i] * cph; wOff.y += A * sin(ph); wdx += D[i].x * k * A * cph; wdz += D[i].y * k * A * cph; }
+            vWaveH = wOff.y; vXZ = xz; }
+          vec3 objectNormal = normalize(vec3(-wdx, 1.0, -wdz));`)
+        .replace('#include <begin_vertex>', 'vec3 transformed = vec3(position) + wOff;');
+      sh.fragmentShader = 'uniform float uTime; uniform float uAmp; varying float vWaveH; varying vec2 vXZ;\n' + NOISE_GLSL + '\n' + sh.fragmentShader
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          float fn = vn2(vXZ / 6.0 + uTime * 0.3) * 0.6 + vn2(vXZ / 2.0 - uTime * 0.5) * 0.4;
+          float crest = smoothstep(0.45, 0.95, vWaveH / max(uAmp, 0.05)) * smoothstep(0.6, 1.4, uAmp);
+          float ship = (1.0 - smoothstep(30.0, 80.0, length(vXZ * vec2(0.55, 1.0)))) * (0.5 + 0.5 * smoothstep(0.3, 1.2, uAmp));
+          float foam = clamp((crest * 0.8 + ship) * smoothstep(0.35, 0.75, fn), 0.0, 1.0);
+          diffuseColor.rgb = mix(diffuseColor.rgb * (0.85 + 0.3 * smoothstep(-0.5, 1.0, vWaveH / max(uAmp, 0.05))), vec3(0.85, 0.9, 0.92), foam * 0.85);`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, 0.85, foam);');
+    };
+    mat.needsUpdate = true;
+  }
+  function patchLand(mat) {
+    mat.onBeforeCompile = sh => {
+      sh.uniforms.uTime = oceanU.uTime;
+      sh.vertexShader = 'attribute float water; varying float vWater; varying vec3 vLP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vWater = water; vLP = position;');
+      sh.fragmentShader = 'uniform float uTime; uniform mat4 modelMatrix; varying float vWater; varying vec3 vLP;\n' + NOISE_GLSL + '\n' + sh.fragmentShader
+        .replace('#include <color_fragment>', `#include <color_fragment>
+          float dn = vn2(vLP.xz / 14.0) * 0.45 + vn2(vLP.xz / 70.0) * 0.35 + vn2(vLP.xz / 400.0) * 0.2;
+          float fade = 1.0 - smoothstep(4000.0, 14000.0, length(vLP.xz));
+          diffuseColor.rgb *= mix(1.0, mix(0.72 + 0.52 * dn, 1.0, vWater), fade);`)
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n roughnessFactor = mix(roughnessFactor, 0.12, vWater);')
+        .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+          if (vWater > 0.5) { vec2 q = vLP.xz / 16.0; float e = 0.5;
+            float h0 = vn2(q + uTime * 0.12) + 0.5 * vn2(q * 2.3 - uTime * 0.2);
+            float hx = vn2(q + vec2(e, 0.0) + uTime * 0.12) + 0.5 * vn2((q + vec2(e, 0.0)) * 2.3 - uTime * 0.2);
+            float hz = vn2(q + vec2(0.0, e) + uTime * 0.12) + 0.5 * vn2((q + vec2(0.0, e)) * 2.3 - uTime * 0.2);
+            vec3 pn = vec3(-(hx - h0) * 0.5, 0.0, -(hz - h0) * 0.5);
+            normal = normalize(normal + (viewMatrix * modelMatrix * vec4(pn, 0.0)).xyz); }`);
+    };
+    mat.needsUpdate = true;
+  }
+
+  /* --- 5. Zemin detayı: ağaçlar, binalar, yollar --- */
+  const siteDetail = {};
+  function buildSiteDetail(site) {
+    if (siteDetail[site]) return siteDetail[site];
+    const g = new T.Group();
+    const s0 = SITES[site], C = COAST[site];
+    const kx = 111320 * Math.cos(s0.lat * D2R), ky = 110574;
+    const toLocal = (lat, lon) => [(lon - s0.lon) * kx + C.shift, -(lat - s0.lat) * ky];
+    const drop = (x, z) => -(x * x + z * z) / (2 * RE);
+    const isLand = (x, z) => surfaceClass(site, x, -z).k === 0;
+    const sb = site === 'starbase';
+    // bitki örtüsü
+    const N = sb ? 900 : 2600;
+    const tg = sb ? new T.SphereGeometry(1, 6, 4) : new T.ConeGeometry(1, 1, 6);
+    if (!sb) tg.translate(0, 0.5, 0);
+    const tm = new T.MeshStandardMaterial({ color: sb ? 0x6e6a3e : 0x2e4a22, roughness: 1, flatShading: true });
+    const trees = new T.InstancedMesh(tg, tm, N);
+    const M4 = new T.Matrix4(), Q = new T.Quaternion(), Sv = new T.Vector3(), Pv = new T.Vector3();
+    let n = 0;
+    for (let i = 0; i < N * 4 && n < N; i++) {
+      const r = 450 + Math.pow(Math.random(), 0.7) * 5500, a = Math.random() * Math.PI * 2;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (!isLand(x, z)) continue;
+      if (Math.abs(x - 1400) < 500 && Math.abs(z) < 300) continue; // iniş alanları
+      if (vnoise(x / 600, z / 600, 4.4) < (sb ? 0.55 : 0.4)) continue;
+      const hgt = sb ? rnd(1, 2.5) : rnd(6, 16), wid = sb ? rnd(1.2, 3) : hgt * rnd(0.25, 0.4);
+      M4.compose(Pv.set(x, drop(x, z) + (sb ? hgt * 0.3 : 0), z), Q, Sv.set(wid, hgt, wid));
+      trees.setMatrixAt(n++, M4);
+    }
+    trees.count = n; trees.castShadow = true; trees.receiveShadow = true; g.add(trees);
+    const conc = new T.MeshStandardMaterial({ color: 0x9a9890, roughness: 0.95 });
+    const asph = new T.MeshStandardMaterial({ color: 0x2b2c2e, roughness: 0.9 });
+    const white = new T.MeshStandardMaterial({ color: 0xe8e8e4, roughness: 0.7 });
+    const steel = new T.MeshStandardMaterial({ color: 0xc8ccd0, roughness: 0.3, metalness: 0.9 });
+    const box = (w, h, d, m, x, z, ry) => { const b = new T.Mesh(new T.BoxGeometry(w, h, d), m); b.position.set(x, drop(x, z) + h / 2, z); b.rotation.y = ry || 0; b.castShadow = b.receiveShadow = true; g.add(b); return b; };
+    const road = pts => { for (let i = 1; i < pts.length; i++) { const [x1, z1] = pts[i - 1], [x2, z2] = pts[i]; const L = Math.hypot(x2 - x1, z2 - z1); const r0 = new T.Mesh(new T.BoxGeometry(L, 0.3, 9), asph); r0.position.set((x1 + x2) / 2, drop((x1 + x2) / 2, (z1 + z2) / 2) + 0.2, (z1 + z2) / 2); r0.rotation.y = -Math.atan2(z2 - z1, x2 - x1); r0.receiveShadow = true; g.add(r0); } };
+    if (!sb) {
+      // VAB benzeri dev bina (Merritt Island) + hangarlar + yollar
+      let [vx, vz] = toLocal(28.586, -80.662);
+      if (!isLand(vx, vz)) vx -= 1500;
+      const vab = box(218, 160, 158, white, vx, vz);
+      const flag = new T.Mesh(new T.PlaneGeometry(60, 40), new T.MeshStandardMaterial({ color: 0x24408e, roughness: 0.8 })); flag.position.set(vx + 109.5, drop(vx, vz) + 100, vz); flag.rotation.y = Math.PI / 2; g.add(flag);
+      box(120, 40, 60, conc, vx - 200, vz + 150);
+      box(60, 22, 40, white, -650, 120, 0.2); box(90, 18, 45, white, -620, -160); box(30, 30, 30, conc, -380, 260);
+      box(50, 14, 30, white, 1400, 420); // LZ kontrol binası
+      for (let i = 0; i < 3; i++) { const t0 = new T.Mesh(new T.SphereGeometry(10, 16, 12), white); t0.position.set(-260 + i * 26, drop(0, 0) + 10, -300); g.add(t0); }
+      road([[0, 0], [-500, 40], [-1400, 300], [-3000, 600], [vx + 200, vz]]);
+      road([[-1400, 300], [-800, 900], [1000, 600], [1400, 0]]);
+    } else {
+      // Starbase: tank çiftliği, üretim alanı, "roket bahçesi", Highway 4
+      const tank = (r, h, x, z) => { const c0 = new T.Mesh(new T.CylinderGeometry(r, r, h, 24), steel); c0.position.set(x, drop(x, z) + h / 2, z); c0.castShadow = true; g.add(c0); const cap = new T.Mesh(new T.SphereGeometry(r, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), steel); cap.position.set(x, drop(x, z) + h, z); g.add(cap); };
+      for (let i = 0; i < 4; i++) tank(4.5, 26, -170 + i * 13, -120);
+      for (let i = 0; i < 3; i++) tank(6, 20, -150 + i * 16, -150);
+      box(60, 80, 40, steel, -2300, -80); box(45, 60, 35, steel, -2380, 10); box(120, 30, 70, white, -2500, -150);
+      for (let i = 0; i < 6; i++) { const x = -2150 - i * 22, z = 120; tank(4.5, i % 2 ? 50 : 70, x, z); const nose = new T.Mesh(new T.ConeGeometry(4.5, 12, 24), steel); nose.position.set(x, drop(x, z) + (i % 2 ? 50 : 70) + 6, z); g.add(nose); }
+      road([[-200, 60], [-1200, 80], [-2200, 40], [-4000, -200], [-7000, -600]]);
+    }
+    siteDetail[site] = g; g.visible = false; scene.add(g);
+    return g;
+  }
+
+  /* --- 7. Yeniden giriş plazma kılıfı --- */
+  const sheathGeo = (() => { const g = new T.SphereGeometry(1, 28, 18); g.translate(0, -0.6, 0); return g; })();
+  function sheathMat() {
+    return new T.ShaderMaterial({
+      uniforms: { uI: { value: 0 }, uTime: { value: 0 } },
+      vertexShader: `#include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying float vF; varying float vY;
+        void main(){ vY = position.y; vec4 mv = modelViewMatrix * vec4(position, 1.0); vec3 n = normalize(normalMatrix * normal);
+          vF = 1.0 - abs(dot(n, normalize(-mv.xyz))); gl_Position = projectionMatrix * mv;
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: `#include <common>
+        #include <logdepthbuf_pars_fragment>
+        uniform float uI; uniform float uTime; varying float vF; varying float vY;
+        void main(){ float front = smoothstep(-1.6, 0.4, vY);
+          float fl = 0.8 + 0.2 * sin(uTime * 40.0 + vY * 9.0);
+          vec3 col = mix(vec3(1.0, 0.35, 0.75), vec3(1.0, 0.62, 0.25), front);
+          float a = (pow(vF, 1.5) * 0.9 + front * 0.25) * uI * fl;
+          gl_FragColor = vec4(col * a, 1.0);
+          #include <logdepthbuf_fragment>
+        }`,
+      transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+    });
+  }
+  const _up = new T.Vector3(0, 1, 0), _fl = new T.Vector3();
+  function updateSheath(c, v, time) {
+    const k = clamp((c.heat - 5e7) / 5e8, 0, 1) * (c.alive && !c.landed ? 1 : 0);
+    if (!v.sheath) { if (k <= 0) return; v.sheath = new T.Mesh(sheathGeo, sheathMat()); v.sheath.renderOrder = 5; v.sheath.frustumCulled = false; scene.add(v.sheath); }
+    const sh = v.sheath;
+    sh.visible = k > 0.01 && v.g.visible;
+    if (!sh.visible) return;
+    const av = c.airVel(), ai = Math.hypot(av[0], av[1]) || 1, a = efRot(), ca = Math.cos(a), sa = Math.sin(a);
+    _fl.set(-(av[0] * ca - av[1] * sa) / ai, -(av[0] * sa + av[1] * ca) / ai, 0);
+    const e = v.ef, ax = axisOf(v), L = c.length;
+    sh.position.set(e[0] + ax[0] * L * 0.5 - F.x, e[1] + ax[1] * L * 0.5 - F.y, -F.z);
+    sh.quaternion.setFromUnitVectors(_up, _fl);
+    const R = (mission.key === 'ss' ? 4.5 : (c.length < 20 ? 0.85 : 1.85));
+    const broad = c.ship && c.state !== 'final';
+    if (broad) sh.scale.set(L * 0.62, R * 7, L * 0.62); else sh.scale.set(R * 2.6, L * 0.55 + R * 6, R * 2.6);
+    sh.material.uniforms.uI.value = k; sh.material.uniforms.uTime.value = time;
+  }
+
+  /* --- 8. Kamera / lens efektleri --- */
+  const LensShader = {
+    uniforms: { tDiffuse: { value: null }, time: { value: 0 }, haze: { value: 0 }, hazeC: { value: new T.Vector2(0.5, 0.3) }, hazeR: { value: 0.15 }, drops: { value: 0 }, vig: { value: 0.25 }, grain: { value: 0.01 }, ca: { value: 0.015 }, aspect: { value: 1.6 }, flareI: { value: 0 }, flareP: { value: new T.Vector2(0.5, 0.5) }, blur: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float time, haze, hazeR, drops, vig, grain, ca, aspect, flareI, blur; uniform vec2 hazeC, flareP; varying vec2 vUv;
+      float hh(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+      void main(){
+        vec2 uv = vUv;
+        vec2 d = uv - hazeC; d.x *= aspect;
+        float hm = haze * exp(-dot(d, d) / (hazeR * hazeR));
+        uv += hm * 0.0016 * vec2(sin(uv.y * 210.0 + time * 23.0), cos(uv.x * 190.0 + time * 19.0));
+        if (drops > 0.01) {
+          vec2 g = uv * vec2(aspect, 1.0) * 6.0; vec2 id = floor(g); vec2 f = fract(g) - 0.5;
+          float r = hh(id); vec2 o = (vec2(hh(id + 3.1), hh(id + 7.7)) - 0.5) * 0.5;
+          float sz = 0.1 + 0.16 * hh(id + 1.3); float dd = length(f - o);
+          float m = step(r, drops * 0.55) * smoothstep(sz, sz * 0.55, dd);
+          uv += (f - o) * m * 0.06;
+        }
+        vec2 cc = uv - 0.5; float e = dot(cc, cc);
+        vec3 col;
+        if (blur > 0.01) {
+          col = vec3(0.0);
+          for (int i = 0; i < 8; i++) { float a = float(i) * 0.785; col += texture2D(tDiffuse, uv + vec2(cos(a), sin(a) * aspect) * blur * 0.008).rgb; }
+          col /= 8.0;
+        } else {
+          col.r = texture2D(tDiffuse, uv + cc * ca * e).r; col.g = texture2D(tDiffuse, uv).g; col.b = texture2D(tDiffuse, uv - cc * ca * e).b;
+        }
+        if (flareI > 0.001) {
+          vec2 dir = vec2(0.5) - flareP;
+          for (int i = 1; i <= 4; i++) { vec2 gp = flareP + dir * (0.45 * float(i)); vec2 q = (uv - gp) * vec2(aspect, 1.0);
+            float s = 0.025 + 0.02 * float(i); col += vec3(0.5 + 0.1 * float(i), 0.6, 1.0 - 0.15 * float(i)) * flareI * smoothstep(s, s * 0.3, length(q)) * 0.08; }
+          col += vec3(0.55, 0.7, 1.0) * flareI * exp(-abs(uv.y - flareP.y) * 260.0) * exp(-abs(uv.x - flareP.x) * 2.5) * 0.35;
+        }
+        col *= mix(1.0, 1.0 - e * 1.6, vig);
+        col += (hh(uv * 937.0 + time) - 0.5) * grain;
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+  };
+  let lensPass = null, dropsT = 0, focusBlur = 0;
+  const _sp = new T.Vector3();
+  function updateLens(dtReal, sky) {
+    if (!lensPass) return;
+    lensPass.enabled = !!QUAL.lens && mode === 'flight' && !cam.map;
+    if (!lensPass.enabled) return;
+    const u = lensPass.uniforms;
+    u.time.value = time % 100; u.aspect.value = innerWidth / innerHeight;
+    const cm0 = cam.mode;
+    u.vig.value = cm0 === 'ground' || cm0 === 'tracker' ? 0.55 : 0.22;
+    u.grain.value = cm0 === 'tracker' ? 0.035 : cm0 === 'ground' ? 0.02 : 0.008;
+    u.ca.value = cm0 === 'tracker' ? 0.02 : 0.006;
+    dropsT = Math.max(0, dropsT - dtReal / 9); u.drops.value = dropsT;
+    focusBlur = Math.max(0, focusBlur - dtReal * 1.2); u.blur.value = focusBlur;
+    // ısı dalgalanması: yere yakın yanan motorlar
+    u.haze.value = 0;
+    const m = mission;
+    if (m) for (const c of m.crafts) {
+      if (!c.alive || !c.firingParts().length) continue;
+      const h = c.alt(); if (h > 400) continue;
+      const v = vis.get(c.id); if (!v || !v.ef) continue;
+      _sp.set(v.ef[0] - F.x, v.ef[1] - F.y, -F.z).project(camera);
+      if (_sp.z > 1) continue;
+      u.hazeC.value.set(_sp.x * 0.5 + 0.5, _sp.y * 0.5 + 0.5 - 0.03);
+      u.hazeR.value = 0.05 + (m.key === 'ss' ? 0.05 : 0);
+      u.haze.value = c.throttle * (1 - h / 400);
+      break;
+    }
+    // mercek parlaması
+    u.flareI.value = 0;
+    const cw = _v3.copy(camera.position).add(F);
+    _sp.copy(camera.position).addScaledVector(SUN, 1e9).project(camera);
+    if (_sp.z < 1 && Math.abs(_sp.x) < 1.1 && Math.abs(_sp.y) < 1.1) {
+      const b = cw.dot(SUN), cc = cw.lengthSq() - RE * RE;
+      const blocked = b < 0 && b * b - cc > 0;
+      if (!blocked) { u.flareP.value.set(_sp.x * 0.5 + 0.5, _sp.y * 0.5 + 0.5); u.flareI.value = (1 - Math.max(Math.abs(_sp.x), Math.abs(_sp.y)) * 0.6) * clamp(sky.hc / 3000 + sky.day, 0, 1) * (cam.mode === 'onboard' ? 0.6 : 1); }
+    }
+  }
+
+  /* --- 10. Uzay: aurora, gerçekçi yıldızlar, Ay --- */
+  let aurora = null, moonMesh = null;
+  function buildSpaceExtras() {
+    const aMat = new T.ShaderMaterial({
+      uniforms: { sunDir: { value: SUN }, uTime: { value: 0 } },
+      vertexShader: `#include <common>
+        #include <logdepthbuf_pars_vertex>
+        varying vec2 vUv; varying vec3 vWN;
+        void main(){ vUv = uv; vWN = normalize(mat3(modelMatrix) * vec3(position.x, 0.0, position.z));
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: `#include <common>
+        #include <logdepthbuf_pars_fragment>
+        uniform vec3 sunDir; uniform float uTime; varying vec2 vUv; varying vec3 vWN;
+        ${NOISE_GLSL}
+        void main(){
+          float x = vUv.x * 90.0;
+          float cur = vn2(vec2(x * 0.7 + uTime * 0.05, 1.0)) * 0.6 + vn2(vec2(x * 3.0 - uTime * 0.11, 4.0)) * 0.4;
+          float rays = 0.6 + 0.4 * vn2(vec2(x * 14.0, uTime * 0.3));
+          float y = vUv.y;
+          float a = smoothstep(0.0, 0.08, y) * pow(1.0 - y, 1.6) * smoothstep(0.35, 0.8, cur) * rays;
+          float night = smoothstep(0.1, -0.15, dot(vWN, sunDir));
+          vec3 col = mix(vec3(0.15, 1.0, 0.45), vec3(0.75, 0.25, 0.65), smoothstep(0.35, 0.9, y));
+          gl_FragColor = vec4(col * a * night * 0.9, 1.0);
+          #include <logdepthbuf_fragment>
+        }`,
+      transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+    });
+    aurora = new T.Group();
+    for (const s of [1, -1]) {
+      const lat = 67 * D2R, h0 = 100000, H = 220000;
+      const r = (RE + h0) * Math.cos(lat);
+      const geo = new T.CylinderGeometry(r * 0.985, r, H, 512, 1, true);
+      const m = new T.Mesh(geo, aMat);
+      m.position.y = s * ((RE + h0) * Math.sin(lat) + H / 2);
+      if (s < 0) m.rotation.x = Math.PI;
+      aurora.add(m);
+    }
+    earthGroup.add(aurora);
+    // gerçekçi parlaklık dağılımı + Samanyolu bandı
+    const N = 9000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), size = new Float32Array(N);
+    const bandN = new T.Vector3(0.3, 0.85, 0.42).normalize(), bx = new T.Vector3(1, 0, 0).cross(bandN).normalize(), by = bandN.clone().cross(bx);
+    for (let i = 0; i < N; i++) {
+      let v;
+      if (i < 5000) { const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u); v = new T.Vector3(s * Math.cos(th), u, s * Math.sin(th)); }
+      else { const th = Math.random() * Math.PI * 2, lat = (Math.random() + Math.random() + Math.random() - 1.5) * 0.12; v = bx.clone().multiplyScalar(Math.cos(th) * Math.cos(lat)).addScaledVector(by, Math.sin(th) * Math.cos(lat)).addScaledVector(bandN, Math.sin(lat)); }
+      v.multiplyScalar(1e9); pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z;
+      const mag = Math.pow(Math.random(), i < 5000 ? 9 : 14);
+      size[i] = 0.9 + mag * 3.2;
+      const b = 0.25 + mag * 1.4, t = Math.random();
+      col[i * 3] = b * (t > 0.85 ? 1.0 : t < 0.25 ? 0.75 : 0.92); col[i * 3 + 1] = b * 0.9; col[i * 3 + 2] = b * (t < 0.25 ? 1.05 : t > 0.85 ? 0.7 : 0.95);
+    }
+    const sg = new T.BufferGeometry();
+    sg.setAttribute('position', new T.BufferAttribute(pos, 3)); sg.setAttribute('color', new T.BufferAttribute(col, 3)); sg.setAttribute('size', new T.BufferAttribute(size, 1));
+    const smat = new T.ShaderMaterial({
+      uniforms: { opacity: { value: 1 }, twinkle: { value: 0 }, uTime: { value: 0 }, pr: { value: renderer.getPixelRatio() } },
+      vertexShader: `#include <common>
+        #include <logdepthbuf_pars_vertex>
+        attribute float size; attribute vec3 color; varying vec3 vC; uniform float twinkle; uniform float uTime; uniform float pr;
+        void main(){ vC = color * (1.0 - twinkle * 0.5 * (0.5 + 0.5 * sin(uTime * 7.0 + position.x * 1e-7 + position.y * 3e-7)));
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_PointSize = size * pr;
+          #include <logdepthbuf_vertex>
+        }`,
+      fragmentShader: `#include <common>
+        #include <logdepthbuf_pars_fragment>
+        varying vec3 vC; uniform float opacity;
+        void main(){ float d = length(gl_PointCoord - 0.5) * 2.0; if (d > 1.0) discard; float a = smoothstep(1.0, 0.0, d);
+          gl_FragColor = vec4(vC * a * opacity, 1.0);
+          #include <logdepthbuf_fragment>
+        }`,
+      transparent: true, depthWrite: false, blending: T.AdditiveBlending,
+    });
+    scene.remove(stars);
+    stars = new T.Points(sg, smat); stars.frustumCulled = false; stars.material.opacity = 1;
+    Object.defineProperty(stars.material, 'opacity', { get: () => smat.uniforms.opacity.value, set: v => { smat.uniforms.opacity.value = v; } });
+    scene.add(stars);
+    // Ay
+    moonMesh = new T.Mesh(new T.SphereGeometry(1, 48, 32), new T.MeshStandardMaterial({ map: planetTexture('moon', 1), roughness: 1, metalness: 0, fog: false }));
+    moonMesh.scale.setScalar(1.737e6); moonMesh.frustumCulled = false;
+    scene.add(moonMesh);
+  }
+  const _ax = new T.Vector3();
+  function updateSpaceExtras(sky) {
+    if (aurora) { aurora.children[0].material.uniforms.uTime.value = time; aurora.visible = sky.hc > 60000 || mode === 'hangar'; }
+    if (stars && stars.material.uniforms) { stars.material.uniforms.uTime.value = time; stars.material.uniforms.twinkle.value = clamp(1 - sky.hc / 20000, 0, 1); }
+    if (moonMesh) {
+      const days = ((sunWeek - 1) * 7 + 3 + (sunHour / 24)) % 29.53;
+      _ax.set(0, 1, 0).applyQuaternion(earthGroup.quaternion);
+      const md = SUN.clone().applyAxisAngle(_ax, Math.PI + days / 29.53 * Math.PI * 2).normalize();
+      moonMesh.position.copy(camera.position).addScaledVector(md, 3.844e8);
+      moonMesh.visible = mode !== 'planet';
+    }
+  }
+
+  /* --- 12. Starlink "treni" --- */
+  let train = null;
+  function startTrain(n) {
+    if (train) { scene.remove(train.pts); train.pts.geometry.dispose(); }
+    const N = Math.max(8, Math.min(60, n));
+    const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(new Float32Array(N * 3), 3));
+    const pts = new T.Points(geo, new T.PointsMaterial({ color: 0xfff4e0, size: 3, sizeAttenuation: false, transparent: true, depthWrite: false, blending: T.AdditiveBlending, fog: false }));
+    pts.frustumCulled = false; scene.add(pts);
+    train = { pts, N, t0: mission.t };
+  }
+  function updateTrain() {
+    if (!train) return;
+    const m = mission, s = m && m.crafts.find(c => c.alive && (c.type === 'upper' || c.type === 'stack' || c.ship));
+    if (!s) { train.pts.visible = false; return; }
+    const e = toEF(s.x, s.y), a = efRot(), sp = Math.hypot(s.vx, s.vy) || 1;
+    const vx = (s.vx * Math.cos(a) - s.vy * Math.sin(a)) / sp, vy = (s.vx * Math.sin(a) + s.vy * Math.cos(a)) / sp;
+    const r = Math.hypot(e[0], e[1]), ux = e[0] / r, uy = e[1] / r;
+    const dt = m.t - train.t0, gap = 4 + dt * 2.2;
+    const P0 = train.pts.geometry.attributes.position.array;
+    for (let i = 0; i < train.N; i++) {
+      const k = (i + 3) * gap * (1 + i * 0.015);
+      P0[i * 3] = e[0] - vx * k - ux * k * k / (2 * r) - F.x; P0[i * 3 + 1] = e[1] - vy * k - uy * k * k / (2 * r) - F.y; P0[i * 3 + 2] = Math.sin(i * 1.7) * gap * 0.15 - F.z;
+    }
+    train.pts.geometry.attributes.position.needsUpdate = true;
+    const lit = sunlitAt(e[0], e[1], 0);
+    train.pts.material.opacity = lit ? 1 : 0.12;
+    train.pts.visible = dt > 20;
+  }
+  function clearTrain() { if (train) { scene.remove(train.pts); train.pts.geometry.dispose(); train = null; } }
+
+  /* --- 4. Egzoz: yoğunlaşma, ses hızı konisi, ızgara kanatçık buharı --- */
+  function condensation(c, v, dt) {
+    const h = c.alt(), rr = S.rho(h) / 1.225; if (rr < 0.15 || !v.ef) return;
+    const asp = c.airSpeed(), e = v.ef, ax = axisOf(v), perp = [ax[1], -ax[0]];
+    const R = mission.key === 'ss' ? 4.6 : (c.length < 20 ? 0.9 : 1.9);
+    if (c.type === 'stack' && asp > 300 && asp < 430 && h > 2500 && h < 15000) {
+      const n = Math.ceil(dt * 90);
+      for (let i = 0; i < n; i++) {
+        const th = Math.random() * Math.PI * 2, L = c.length * rnd(0.35, 0.75), rr0 = R * rnd(1.4, 2.4);
+        smokeP.spawn(e[0] + ax[0] * L + perp[0] * Math.cos(th) * rr0, e[1] + ax[1] * L + perp[1] * Math.cos(th) * rr0, Math.sin(th) * rr0, 0, 0, 0,
+          rnd(0.2, 0.45), R * 1.2, R * 2.6, [1, 1, 1], [1, 1, 1], 0.45, 0, 0.5, 0);
+      }
+    }
+    if (c.rec && !c.ship && c.finsOut && (c.state === 'final' || c.state === 'descent') && h > 400 && h < 14000 && asp > 170) {
+      const top = c.length - 1.6;
+      for (let s = 0; s < 4; s++) {
+        if (Math.random() > dt * 70) continue;
+        const sx = s < 2 ? (s ? 1 : -1) : 0, sz = s >= 2 ? (s === 3 ? 1 : -1) : 0, rr0 = R + 1.4;
+        smokeP.spawn(e[0] + ax[0] * top + perp[0] * sx * rr0, e[1] + ax[1] * top + perp[1] * sx * rr0, sz * rr0, 0, 0, 0,
+          rnd(0.6, 1.3), 0.6, 3.2, [1, 1, 1], [0.95, 0.96, 1], 0.42, 0, 0.3, 0);
+      }
+    }
+  }
+
   /* ================= ANA DÖNGÜ ================= */
   let last = performance.now(), time = 0, fpsAcc = 0, fpsN = 0, lowQ = false;
   function frame(now) {
@@ -2329,8 +2990,8 @@
     if (fpsAcc > 4) {
       const fps = fpsN / fpsAcc;
       if (fps < 24 && !lowQ && P.state.opts.autoQuality !== false) {
-        const order = ['high', 'med', 'low'], cur = P.state.opts.quality || 'high', i = order.indexOf(cur);
-        if (i < 2) { P.state.opts.quality = order[i + 1]; P.save(); applyQuality(P.state.opts.quality); if (mode === 'flight') banner('Grafik kalitesi: ' + QUAL.name); }
+        const order = ['ultra', 'high', 'med', 'low'], cur = P.state.opts.quality || 'high', i = order.indexOf(cur);
+        if (i < 3) { P.state.opts.quality = order[i + 1]; P.save(); applyQuality(P.state.opts.quality); if (mode === 'flight') banner('Grafik kalitesi: ' + QUAL.name); }
         else lowQ = true;
       }
       fpsAcc = 0; fpsN = 0;
@@ -2374,6 +3035,11 @@
     const sky = updateSky();
     updateStatics(sky);
     updateWeatherFX(dtReal, sky);
+    updateVolClouds(dtReal, sky, sky.info);
+    updateSpaceExtras(sky);
+    updateLens(dtReal, sky);
+    if (mission) updateTrain();
+    oceanU.uTime.value = mission ? mission.t : time; oceanU.uAmp.value = mission ? Math.max(0.2, (mission.waves || 1) * 0.5) : 0.4;
     if (mode === 'flight') { updateHUD(dtReal); updateBroadcast(); }
     if (bloom) bloom.strength = mode === "hangar" ? 0.3 : 0.5;
     if (composer && QUAL.bloom) composer.render(); else renderer.render(scene, camera);
@@ -2389,7 +3055,9 @@
       applyQuality(P.state.opts.quality || 'high');
       audio.setMuted(!!P.state.opts.muted);
       buildEarth();
+      buildSpaceExtras();
       buildSites();
+      if (composer && window.ShaderPass) { lensPass = new window.ShaderPass(LensShader); composer.insertPass(lensPass, 2); }
       fireP = new Particles(9000, true);
       smokeP = new Particles(9000, false);
       buildConstellation();

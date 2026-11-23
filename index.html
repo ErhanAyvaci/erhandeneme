@@ -220,7 +220,8 @@
   import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
   import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
   import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-  Object.assign(window, { THREE, RoomEnvironment, EffectComposer, RenderPass, UnrealBloomPass, OutputPass });
+  import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+  Object.assign(window, { THREE, RoomEnvironment, EffectComposer, RenderPass, UnrealBloomPass, OutputPass, ShaderPass });
   for (const f of ['js/hangar.js', 'js/game.js']) {
     await new Promise((res, rej) => { const s = document.createElement('script'); s.src = f; s.onload = res; s.onerror = rej; document.body.appendChild(s); });
   }

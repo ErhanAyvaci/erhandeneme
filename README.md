@@ -106,6 +106,22 @@ Dokunmatik cihazlarda ekran düğmeleri otomatik görünür.
 - Sıralı patlamalar ve yanan yakıt bulutu, alacakaranlıkta güneşle aydınlanan "denizanası" egzoz bulutu.
 - Türkçe sesli geri sayım ve anonslar, canlı yayın telemetri şeridi, bölünmüş ekran, hangarda dönen 3D roket önizlemesi, etkileşimli eğitim.
 
+## Görsel paket
+
+- **Atmosfer saçılmalı gökyüzü:** ufukta açılan mavi, gün batımında turuncu kuşak, yükseldikçe kararan gök (aynı model sis ve bulut ışığını da besler).
+- **Hacimli bulutlar** (ışın yürütme): içinden geçilebilen kümülüsler, güneşle aydınlanan kenarlar, roketin bulutta açtığı delik, gece motor ışığıyla alttan aydınlanma, bulut içi şimşek.
+- **Okyanus:** hava durumuna bağlı Gerstner dalgaları, dalga tepesinde ve drone gemi çevresinde köpük, gövdeye vuran serpinti, güneş yansıması; kıyıda sığ su ve köpük.
+- **Egzoz:** irtifayla genişleyen vakum bulutu, şok elmasları, kalkışta rampayı yutan buhar bulutu, ses hızında yoğunlaşma konisi, iniş sırasında ızgara kanatçık buharı.
+- **Zemin:** yakın plan detay dokusu, ağaçlar/çalılar, VAB benzeri bina, hangarlar ve yollar; Starbase'de tank çiftliği, üretim alanı, "roket bahçesi" ve Highway 4.
+- **Modeller:** uçtukça kararan motor nozulları, inişte bacak amortisör esnemesi.
+- **Yeniden giriş:** pembe-turuncu plazma kılıfı ve iyonize iz.
+- **Kamera:** kalkışta ısı dalgalanması, lense su damlası, mercek parlaması, renk sapması, vinyet ve film greni, kamera değişiminde odak kayması, Max-Q sarsıntısı.
+- **Işık:** kalkışta zeminin turuncuya boyanması, gece bulutların alttan aydınlanması.
+- **Uzay:** aurora perdeleri, gerçek parlaklık dağılımlı yıldızlar ve Samanyolu bandı, gökyüzünde evresiyle Ay, ince mavi atmosfer çizgisi.
+- **Ay/Mars:** krater ve kum tepeli yükseklik haritası, sert gölgeler, Mars'ta kızıl gök ve toz fırtınası.
+- **Starlink treni:** bırakılan uydular yörüngede inci dizisi gibi açılır (yer/teleobjektif kamerasıyla izlenebilir).
+- **Kalite:** Düşük / Orta / Yüksek / **Ultra** — hacimli bulut adım sayısı, lens efektleri, gölgeler ve parçacık yoğunluğu buna göre ölçeklenir.
+
 ## Altyapı
 
 - **Hızlı açılış:** düşük çözünürlüklü dokular sayfayla gelir, yüksek çözünürlük (`js/textures-hi.js`) arka planda yüklenir.
