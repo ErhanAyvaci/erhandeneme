@@ -162,7 +162,7 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
 
 /* ---------- Sonuç ---------- */
 #result, #help, #report { display: flex; align-items: center; justify-content: center; background: rgba(2,4,9,0.6); z-index: 20; }
-.res-box { width: 460px; max-width: 92vw; background: rgba(8,14,26,0.92); border: 1px solid var(--line); border-radius: 14px; padding: 22px 26px; }
+.res-box { max-height: 92vh; overflow-y: auto; width: 460px; max-width: 92vw; background: rgba(8,14,26,0.92); border: 1px solid var(--line); border-radius: 14px; padding: 22px 26px; }
 .res-box h1 { margin: 0 0 4px; letter-spacing: 3px; }
 .res-box h1.good { color: var(--good); } .res-box h1.bad { color: var(--bad); }
 .res-lines div { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px; }
@@ -195,6 +195,10 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
 }
 
 @media (max-width: 600px) {
+  .help-box { font-size: 13px; }
+  .help-box h1 { font-size: 20px; }
+  #hangar { overflow-y: auto; }
+  .hg-goal .goal-text { display: none; }
   .hg-top { gap: 8px; }
   .brand small { display: none; }
   .hg-stats { gap: 10px; }
