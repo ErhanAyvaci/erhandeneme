@@ -25,72 +25,59 @@
   const ROCKETS = {
     f1: {
       key: 'f1', name: 'Falcon 1', year: 2008, engineType: 'merlin',
-      desc: 'Tek Merlin 1C motorlu küçük roket. İlk adım: 2 Starlink uydusu.',
-      launchCost: 7e6, unlock: { cost: 0, req: null },
       targetAlt: 220000,
-      modes: { exp: { sats: 2 } },
-      fairing: 150,
       stages: [
-        { id: 's1', kind: 'booster', dry: 1300, prop: 21800, thrSL: 360e3, thrVac: 410e3, ispSL: 265, ispVac: 304, engines: 1, minThr: 0.7, dia: 1.7, len: 15.5, recoverable: false },
+        { id: 's1', kind: 'booster', dry: 1300, prop: 21800, thrSL: 360e3, thrVac: 410e3, ispSL: 265, ispVac: 304, engines: 1, minThr: 0.7, landMinThr: 0.4, landThrFrac: 0.16, dia: 1.7, len: 15.5, recoverable: true, landEngines: 1, boostEngines: 1, entryBurn: true },
         { id: 's2', kind: 'upper', dry: 420, prop: 3700, thrSL: 22e3, thrVac: 31e3, ispSL: 250, ispVac: 330, engines: 1, minThr: 0.6, dia: 1.7, len: 5.5 },
       ],
-      payloadLen: 4.5,
+      fairing: 150, payloadLen: 4.5,
       pitch: { pmax: 72, hp: 90000, exp: 0.55 },
-      reserve: { exp: 0.0 },
+      reserve: { exp: 0, ocean: 0.1, rtls: 0.2 },
     },
     f9: {
-      key: 'f9', name: 'Falcon 9 Block 5', year: 2018, engineType: 'merlin',
-      desc: '9 Merlin 1D, yeniden kullanılabilir 1. kademe. Rampa (RTLS) veya drone gemiye iniş.',
-      launchCost: 62e6, reuseCost: 28e6, unlock: { cost: 40e6, req: { f1: 2 } },
+      key: 'f9', name: 'Falcon 9', year: 2010, engineType: 'merlin',
       targetAlt: 300000,
-      modes: { rtls: { sats: 40 }, asds: { sats: 60 }, exp: { sats: 70 } },
-      fairing: 1900,
       stages: [
         { id: 's1', kind: 'booster', dry: 25600, prop: 395700, thrSL: 7607e3, thrVac: 8227e3, ispSL: 282, ispVac: 311, engines: 9, minThr: 0.57, dia: 3.66, len: 47.7, recoverable: true, landEngines: 1, boostEngines: 3, entryBurn: true },
         { id: 's2', kind: 'upper', dry: 3900, prop: 107500, thrSL: 600e3, thrVac: 981e3, ispSL: 200, ispVac: 348, engines: 1, minThr: 0.39, dia: 3.66, len: 12.6 },
       ],
-      payloadLen: 13.1,
+      fairing: 1900, payloadLen: 13.1,
       pitch: { pmax: 68, hp: 85000, exp: 0.5 },
-      reserve: { rtls: 0.17, asds: 0.09, exp: 0.0 },
+      reserve: { exp: 0, ocean: 0.07, rtls: 0.17, asds: 0.09 },
     },
     fh: {
       key: 'fh', name: 'Falcon Heavy', year: 2018, engineType: 'merlin',
-      desc: '27 Merlin motoru. Yan boosterlar rampaya çift iniş yapar, merkez çekirdek drone gemiye.',
-      launchCost: 97e6, reuseCost: 45e6, unlock: { cost: 120e6, req: { f9: 3 } },
       targetAlt: 320000,
-      modes: { asds: { sats: 95 }, exp: { sats: 115 } },
-      fairing: 1900,
       stages: [
         { id: 's1', kind: 'booster', dry: 25600, prop: 395700, thrSL: 7607e3, thrVac: 8227e3, ispSL: 282, ispVac: 311, engines: 9, minThr: 0.57, dia: 3.66, len: 47.7, recoverable: true, landEngines: 1, boostEngines: 3, entryBurn: true, center: true, coreThrottle: 0.62 },
         { id: 's2', kind: 'upper', dry: 3900, prop: 107500, thrSL: 600e3, thrVac: 981e3, ispSL: 200, ispVac: 348, engines: 1, minThr: 0.39, dia: 3.66, len: 12.6 },
       ],
       sides: { dry: 23500, prop: 395700, thrSL: 7607e3, thrVac: 8227e3, ispSL: 282, ispVac: 311, engines: 9, minThr: 0.57, dia: 3.66, len: 47.7, recoverable: true, landEngines: 1, boostEngines: 3, entryBurn: true, reserve: 0.17 },
-      payloadLen: 13.1,
+      fairing: 1900, payloadLen: 13.1,
       pitch: { pmax: 66, hp: 85000, exp: 0.5 },
-      reserve: { asds: 0.07, exp: 0.0 },
+      reserve: { exp: 0, ocean: 0.06, asds: 0.07 },
     },
     ss: {
       key: 'ss', name: 'Starship', year: 2025, engineType: 'raptor',
-      desc: '33 Raptor motorlu Super Heavy + Ship. Booster kuleye döner ve "chopstick" kollarıyla yakalanır.',
-      launchCost: 90e6, reuseCost: 30e6, unlock: { cost: 300e6, req: { fh: 1 } },
       targetAlt: 300000,
-      modes: { catch: { sats: 380 }, exp: { sats: 420 } },
-      fairing: 0,
       stages: [
         { id: 's1', kind: 'booster', dry: 200000, prop: 3400000, thrSL: 74.6e6, thrVac: 82.5e6, ispSL: 327, ispVac: 350, engines: 33, minThr: 0.45, dia: 9, len: 71, recoverable: true, landEngines: 3, landStart: 13, boostEngines: 13, entryBurn: false, hotStage: true },
-        { id: 's2', kind: 'ship', dry: 120000, prop: 1500000, thrSL: 12e6, thrVac: 15.4e6, ispSL: 330, ispVac: 365, engines: 6, minThr: 0.4, dia: 9, len: 52 },
+        { id: 's2', kind: 'ship', dry: 120000, prop: 1500000, thrSL: 12e6, thrVac: 15.4e6, ispSL: 330, ispVac: 365, engines: 6, minThr: 0.4, dia: 9, len: 52, landEngines: 3, landStart: 3 },
       ],
-      payloadLen: 0,
+      fairing: 0, payloadLen: 0,
       pitch: { pmax: 66, hp: 85000, exp: 0.5 },
-      reserve: { catch: 0.13, exp: 0.0 },
+      reserve: { exp: 0, ocean: 0.08, catch: 0.13 },
     },
   };
 
-  const MODE_NAMES = { rtls: 'Rampaya dönüş (RTLS)', asds: 'Drone gemi (ASDS)', exp: 'Tek kullanımlık', catch: 'Kule yakalama' };
+  const MODE_NAMES = { rtls: 'Rampaya dönüş (RTLS)', asds: 'Drone gemi (ASDS)', exp: 'Tek kullanımlık', catch: 'Kule yakalama', ocean: 'Okyanusa kontrollü iniş (test)' };
+  // rüzgâr: yüzey (m/s, doğuya) + jet akımı (~11 km)
+  let WIND = { s: 0, j: 0 };
+  const windAt = h => WIND.s * Math.exp(-Math.max(0, h) / 3000) + WIND.j * Math.exp(-(((h - 11000) / 4500) ** 2));
 
   /* ---------------- Parça & Araç ---------------- */
   function makePart(def, role) {
-    return { def, role, prop: def.prop, dry: def.dry, firing: false, engFrac: 1, cap: def.coreThrottle || 1 };
+    return { def, role, prop: def.prop, dry: def.dry, firing: false, engFrac: 1, cap: def.coreThrottle || 1, health: 1 };
   }
 
   let craftId = 1;
@@ -116,7 +103,7 @@
     upAng() { return Math.atan2(this.y, this.x); }
     downrange() { return RE * wrapPi(padAng(NOW) - this.upAng()); }
     speed() { return Math.hypot(this.vx, this.vy); }
-    airVel() { return [this.vx - W_E * this.y, this.vy + W_E * this.x]; }
+    airVel() { const r = this.r(), w = windAt(r - RE); return [this.vx - W_E * this.y - w * this.y / r, this.vy + W_E * this.x + w * this.x / r]; }
     airSpeed() { const a = this.airVel(); return Math.hypot(a[0], a[1]); }
     retroAng() { const a = this.airVel(); return Math.atan2(-a[1], -a[0]); }
     vEastIn() { const e = this.east(); return this.vx * e[0] + this.vy * e[1]; }
@@ -131,7 +118,7 @@
       const p = pres(this.alt()); let T = 0;
       for (const pt of this.firingParts()) {
         const d = pt.def;
-        T += (d.thrVac - (d.thrVac - d.thrSL) * p) * pt.engFrac * pt.cap;
+        T += (d.thrVac - (d.thrVac - d.thrSL) * p) * pt.engFrac * pt.cap * pt.health;
       }
       return T;
     }
@@ -172,7 +159,7 @@
     for (const pt of c.parts) {
       if (!pt.firing || pt.prop <= 0) continue;
       const d = pt.def;
-      const f = c.throttle * pt.engFrac * pt.cap;
+      const f = c.throttle * pt.engFrac * pt.cap * pt.health;
       if (f <= 0) continue;
       const tv = d.thrVac * f;
       const mdot = tv / (d.ispVac * G0);
@@ -205,19 +192,35 @@
 
   /* Balistik çarpma noktası tahmini (sürüklemeli) */
   function predictImpact(c, targetH) {
+    // RK4 integrasyonu (sığ yeniden girişler çok hassas)
     let x = c.x, y = c.y, vx = c.vx, vy = c.vy;
-    const m = c.mass(), cdA = c.cd * c.area;
-    let dt = 1, tt = 0;
-    for (let i = 0; i < 4000; i++) {
+    const m = typeof c.mass === 'function' ? c.mass() : c.mass, cdA = c.cd * c.area;
+    const acc = (x, y, vx, vy) => {
       const r = Math.hypot(x, y), h = r - RE;
-      if (h <= (targetH || 0) && i > 0) break;
-      dt = h > 150000 ? 4 : h > 20000 ? 1 : 0.5;
       let ax = -MU * x / (r * r * r), ay = -MU * y / (r * r * r);
-      const ax_ = vx - W_E * y, ay_ = vy + W_E * x;
-      const v = Math.hypot(ax_, ay_), rr = rho(h);
-      if (rr > 0 && v > 0) { const D = 0.5 * rr * v * cdA / m; ax -= D * ax_; ay -= D * ay_; }
-      vx += ax * dt; vy += ay * dt; x += vx * dt; y += vy * dt; tt += dt;
+      const rr = rho(h);
+      if (rr > 0) {
+        const w = windAt(h); const ux = vx - W_E * y - w * y / r, uy = vy + W_E * x + w * x / r;
+        const v = Math.hypot(ux, uy); const D = 0.5 * rr * v * cdA / m; ax -= D * ux; ay -= D * uy;
+      }
+      return [ax, ay];
+    };
+    let tt = 0, hit = false;
+    for (let i = 0; i < 12000; i++) {
+      const h = Math.hypot(x, y) - RE;
+      if (h <= (targetH || 0) && i > 0) { hit = true; break; }
+      const dt = h > 150000 ? 5 : h > 30000 ? 1 : 0.5;
+      const k1 = acc(x, y, vx, vy);
+      const k2 = acc(x + vx * dt / 2, y + vy * dt / 2, vx + k1[0] * dt / 2, vy + k1[1] * dt / 2);
+      const k3 = acc(x + (vx + k1[0] * dt / 2) * dt / 2, y + (vy + k1[1] * dt / 2) * dt / 2, vx + k2[0] * dt / 2, vy + k2[1] * dt / 2);
+      const k4 = acc(x + (vx + k2[0] * dt / 2) * dt, y + (vy + k2[1] * dt / 2) * dt, vx + k3[0] * dt, vy + k3[1] * dt);
+      x += dt * (vx + dt / 6 * (k1[0] + k2[0] + k3[0]));
+      y += dt * (vy + dt / 6 * (k1[1] + k2[1] + k3[1]));
+      vx += dt / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
+      vy += dt / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
+      tt += dt;
     }
+    if (!hit) return NaN;
     return RE * wrapPi(padAng(NOW + tt) - Math.atan2(y, x));
   }
 
@@ -238,10 +241,21 @@
 
   /* ---------------- Görev ---------------- */
   class Mission {
-    constructor(key, mode, opts) {
+    constructor(key, opts) {
       opts = opts || {};
+      if (typeof opts === 'string') opts = { mode: opts, payloadMass: arguments[2] && arguments[2].payloadMass };
+      const mode = opts.mode || 'exp';
       this.def = ROCKETS[key];
-      this.key = key; this.mode = mode;
+      this.key = key; this.mode = mode; this.opts = opts;
+      this.sideMode = opts.sideMode || 'rtls';
+      this.payloadMass = opts.payloadMass !== undefined ? opts.payloadMass : 1000;
+      this.payloadKind = opts.payloadKind || 'starlink';
+      this.fairingMass = opts.fairing === false ? 0 : this.def.fairing;
+      this.targetAlt = opts.targetAlt || this.def.targetAlt;
+      this.targetAp = opts.targetAp || 0;
+      this.waves = opts.waves || 0;
+      WIND = { s: (opts.wind && opts.wind.s) || 0, j: (opts.wind && opts.wind.j) || 0 };
+      this.engineFail = opts.engineFail || null;
       this.autopilot = opts.autopilot !== false;
       this.autoLand = opts.autoLand !== false;
       this.listeners = [];
@@ -251,13 +265,13 @@
       this.structures = [];
       this.events = [];
       this.phase = 'countdown';
-      this.satsPlanned = this.def.modes[mode].sats;
-      this.satsDeployed = 0;
+      this.satsPlanned = opts.sats || 0;
+      this.satsDeployed = 0; this.deployed = false;
       this.maxQ = 0; this.maxQDone = false;
       this.result = null;
       this.focusId = null;
       this.reused = !!opts.reused;
-      this.fairingDone = !this.def.fairing;
+      this.fairingDone = !this.fairingMass;
       this.build();
     }
     on(fn) { this.listeners.push(fn); }
@@ -274,9 +288,8 @@
       if (d.sides) {
         parts.push(makePart(d.sides, 'sideL'), makePart(d.sides, 'sideR'));
       }
-      const pay = this.satsPlanned * SAT_MASS;
       const stack = new Craft({
-        name: d.name, type: 'stack', parts, extraMass: pay + (d.fairing || 0),
+        name: d.name, type: 'stack', parts, extraMass: this.payloadMass + this.fairingMass,
         area: Math.PI * (st[0].dia / 2) ** 2 * (d.sides ? 3 : 1), cd: 0.45,
         length: st[0].len + st[1].len + d.payloadLen,
         held: true, rotRate: 4 * DEG,
@@ -290,6 +303,7 @@
       if (this.key === 'ss') {
         this.structures.push({ kind: 'mount', d: 0, r: 9, top: 20 });
         this.structures.push({ kind: 'tower', d: -20, r: 7, top: 146 });
+        this.structures.push({ kind: 'tower2', d: 330, r: 7, top: 146 });
       } else {
         this.structures.push({ kind: 'pad', d: 0, r: 30, top: 0 });
       }
@@ -314,7 +328,7 @@
           if (c && c.rec && c.state === 'final' && !c.burnLit) { c.burnLit = true; c.manualBurn = true; this.emit('landingBurn', { craft: c }); }
           break;
         case 'catch':
-          if (c && c.rec && c.rec.kind === 'catch') this.tryCatch(c, true);
+          if (c && c.rec && (c.rec.kind === 'catch' || c.rec.kind === 'shipcatch')) this.tryCatch(c, true);
           break;
         case 'deploy': this.deploy(); break;
         case 'fts': if (c && c.alive) this.explode(c, 'Uçuş sonlandırma sistemi (FTS) tetiklendi'); break;
@@ -344,6 +358,7 @@
           this.emit('liftoff', { craft: s });
         }
       }
+      if (this.engineFail && !this.engineFail.done && this.t >= this.engineFail.t) this.doEngineFail();
       for (const c of this.crafts) {
         if (!c.alive) continue;
         this.control(c, dt);
@@ -355,7 +370,28 @@
       this.updatePhase(dt);
     }
 
+    doEngineFail() {
+      const ef = this.engineFail; ef.done = true;
+      const c = this.stack; if (!c || !c.alive) return;
+      const p = c.parts.find(q => q.role === (ef.part || 'booster') && q.firing);
+      if (!p) return;
+      const n = p.def.engines;
+      const out = Math.min(ef.count || 1, n);
+      if (n <= out) {
+        p.health = 0; p.dead = true;
+        this.emit('engineOut', { craft: c, part: p, total: true });
+        this.emit('msg', { text: 'MOTOR ARIZASI! ' + (p.role === 'upper' ? 'Üst kademe' : '1. kademe') + ' motoru durdu — itki kaybı!', bad: true });
+      } else {
+        p.health = (n - out) / n;
+        this.emit('engineOut', { craft: c, part: p, total: false, n: out });
+        this.emit('msg', { text: 'Motor arızası: ' + out + ' motor kapandı — kalan ' + (n - out) + ' motorla devam (motor-arızası toleransı)', bad: true });
+      }
+    }
     control(c, dt) {
+      if (c.type === 'fairing' && c.fairingRec && !c.chute && c.alt() < 12000 && c.vUp() < 0) {
+        c.chute = true; c.cd = 1.4; c.area = 700; c.dirCmd = c.upAng(); c.rotRate = 30 * DEG;
+        this.emit('chute', { craft: c });
+      }
       if (c.ascent === 1) this.ascent1(c, dt);
       else if (c.ascent === 2) this.ascent2(c, dt);
       if (c.rec) this.recovery(c, dt);
@@ -371,7 +407,8 @@
         let pitch = 0;
         if (h > 250) pitch = d.pitch.pmax * DEG * Math.pow(Math.min(1, h / d.pitch.hp), d.pitch.exp);
         if (v > 90) {
-          const pro = Math.atan2(c.vEast(), c.vUp());
+          const av0 = c.airVel(), u0 = c.up(), e0 = c.east();
+          const pro = Math.atan2(av0[0] * e0[0] + av0[1] * e0[1], av0[0] * u0[0] + av0[1] * u0[1]);
           pitch = clamp(pitch, pro - 3 * DEG, pro + 3 * DEG);
         }
         c.setPitchCmd(pitch);
@@ -385,15 +422,17 @@
       if (v > 50) {
         const avv = c.airVel();
         const aoa = Math.abs(wrapPi(Math.atan2(avv[1], avv[0]) - c.dir));
-        if (c.q * Math.sin(Math.min(aoa, Math.PI / 2)) > 3500 && c.q > 6000) {
+        const jet = Math.abs(windAt(h) - WIND.s * Math.exp(-Math.max(0, h) / 3000));
+        c.load = c.q * (Math.sin(Math.min(aoa, Math.PI / 2)) + jet / Math.max(v, 100));
+        if (c.load > 3500 && c.q > 6000) {
           c.stress = (c.stress || 0) + dt;
-          if (c.stress > 0.6) { this.explode(c, 'Aerodinamik yük aşıldı — roket parçalandı (yüksek hücum açısı)'); return; }
+          if (c.stress > 0.6) { this.explode(c, jet > 25 ? 'Jet akımı rüzgârı yapısal sınırı aştı — roket Max-Q\'da parçalandı' : 'Aerodinamik yük aşıldı — roket parçalandı (yüksek hücum açısı)'); return; }
         } else c.stress = 0;
       }
       // yan boosterlar
       const sideL = c.parts.find(p => p.role === 'sideL');
       if (sideL) {
-        const res = d.sides.reserve * d.sides.prop;
+        const res = (this.sideMode === 'exp' ? 0.02 : d.sides.reserve) * d.sides.prop;
         if (sideL.prop <= res) { this.separateSides(); }
       }
       // MECO
@@ -435,8 +474,8 @@
           x: s.x + e[0] * off, y: s.y + e[1] * off, vx: s.vx + e[0] * off * 0.4, vy: s.vy + e[1] * off * 0.4,
           dir: s.dir, dirCmd: s.dir, area: 16.8, cd: 1.2, length: part.def.len, rotRate: 10 * DEG,
         });
-        c.rec = { kind: 'rtls', target: side === 'L' ? 1100 : 1700, entryBurn: true, boost: true };
-        c.state = 'coast'; c.stateT = 0;
+        if (this.sideMode === 'exp') { c.state = 'expended'; c.dirCmd = c.dir + (side === 'L' ? -0.5 : 0.5); }
+        else { c.rec = { kind: 'rtls', target: side === 'L' ? 1100 : 1700, entryBurn: true, boost: true }; c.state = 'coast'; c.stateT = 0; }
         this.landingTargets[c.id] = c.rec;
         this.crafts.push(c);
         return c;
@@ -462,6 +501,7 @@
         let rec;
         if (this.mode === 'rtls') rec = { kind: 'rtls', target: 1400, boost: true, entryBurn: true };
         else if (this.mode === 'catch') rec = { kind: 'catch', target: 0, boost: true, entryBurn: false };
+        else if (this.mode === 'ocean') { const imp = predictImpact(booster); rec = { kind: 'ocean', target: imp - 2500, boost: false, entryBurn: !!b.def.entryBurn }; }
         else {
           const imp = predictImpact(booster);
           rec = { kind: 'asds', target: imp - 2500, boost: false, entryBurn: true };
@@ -479,7 +519,7 @@
       s.type = 'upper';
       s.name = d.key === 'ss' ? 'Ship' : '2. Kademe';
       s.x += dx * L1; s.y += dy * L1; s.vx += dx * 0.8; s.vy += dy * 0.8;
-      s.area = Math.PI * (d.stages[1].dia / 2) ** 2; s.length = d.stages[1].len + d.payloadLen;
+      s.area = Math.PI * (d.stages[1].dia / 2) ** 2; s.length = d.stages[1].len + (this.fairingMass ? d.payloadLen : (this.payloadKind === 'dragon' ? 8.1 : 0));
       s.ascent = 2; s.manual = !this.autopilot; s.throttle = 1; s.rotRate = 5 * DEG;
       this.phase = 'ascent2'; this.sepT = this.t;
       if (!d.stages[0].hotStage) up.firing = false;
@@ -490,15 +530,15 @@
       if (this.fairingDone) return;
       const s = this.stack, d = this.def;
       this.fairingDone = true;
-      s.extraMass -= d.fairing;
+      s.extraMass -= this.fairingMass;
       const dx = Math.cos(s.dir), dy = Math.sin(s.dir), e = s.east();
       const halves = [];
       for (const side of [-1, 1]) {
         const c = new Craft({
-          name: 'Burun konisi', type: 'fairing', side, parts: [], extraMass: d.fairing / 2,
+          name: 'Burun konisi ' + (side < 0 ? 'A' : 'B'), type: 'fairing', side, parts: [], extraMass: this.fairingMass / 2,
           x: s.x + dx * (d.stages[1].len), y: s.y + dy * (d.stages[1].len),
           vx: s.vx + e[0] * side * 6, vy: s.vy + e[1] * side * 6, dir: s.dir, dirCmd: s.dir + side * 1.5, rotRate: 25 * DEG,
-          area: 20, cd: 1.2, ttl: 40,
+          area: 20, cd: 1.2, ttl: this.opts.fairingRec ? Infinity : 40, fairingRec: !!this.opts.fairingRec,
         });
         this.crafts.push(c); halves.push(c);
       }
@@ -515,7 +555,7 @@
       }
       if (!this.fairingDone && c.alt() > 105000) this.dropFairing();
       const o = c.orbit();
-      const Ht = d.targetAlt;
+      const Ht = this.targetAp ? 200000 : this.targetAlt;
       if (!c.manual && up.firing) {
         const h = c.alt(), r = c.r();
         const vz = c.vUp(), vh = c.vEastIn();
@@ -531,12 +571,14 @@
         // yörüngeye yaklaşınca gaz kıs
         const vc = Math.sqrt(MU / r);
         const dv = vc - vh;
-        c.throttle = dv < 60 ? clamp(dv / 60, 0.4, 1) : 1;
+        c.throttle = (dv < 60 && !this.targetAp) ? clamp(dv / 60, 0.4, 1) : 1;
+        if (this.targetAp && o.pe > 150000) { c.setPitchCmd(Math.PI / 2 - clamp((h - Ht) / 200000, -0.3, 0.3)); }
         const Tm = c.maxThrust(); if (Tm > 0) c.throttle = Math.min(c.throttle, 4 * G0 * m / Tm);
       }
       if (up.firing && !c.seco) {
         const target = Ht - 15000;
-        if ((o.pe > 160000 && o.ap >= Ht - 25000) || (o.pe >= Math.min(target, c.alt() - 8000) && o.pe > 160000) || up.prop <= 0) {
+        const done = this.targetAp ? (o.pe > 160000 && o.ap >= this.targetAp) : ((o.pe > 160000 && o.ap >= Ht - 25000) || (o.pe >= Math.min(target, c.alt() - 8000) && o.pe > 160000));
+        if (done || up.prop <= 0 || up.dead) {
           this.seco(c, o);
         }
       }
@@ -546,7 +588,7 @@
       const up = c.parts[0];
       c.seco = true; up.firing = false; c.throttle = 0;
       o = o || c.orbit();
-      if (o.pe > 140000) {
+      if (o.pe > 140000 && (!this.targetAp || o.ap >= this.targetAp * 0.97)) {
         this.phase = 'orbit'; this.orbitT = this.t; c.ascent = 0;
         this.emit('seco', { craft: c, orbit: o, ok: true });
         this.emit('orbit', { craft: c, orbit: o });
@@ -554,18 +596,32 @@
       } else {
         this.emit('seco', { craft: c, orbit: o, ok: false });
         this.phase = 'failed2';
-        this.failUpper = 'Yakıt bitti — yörünge hızına ulaşılamadı';
+        if (o.pe > 140000) {
+          // düşük yörünge: kısmi başarı
+          this.phase = 'orbit'; this.orbitT = this.t; c.ascent = 0; this.partial = true;
+          this.emit('msg', { text: 'Hedef yörüngeye ulaşılamadı — yük daha düşük bir yörüngede kaldı', bad: true });
+          this.emit('orbit', { craft: c, orbit: o, partial: true });
+          return;
+        }
+        this.failUpper = up.dead ? 'Üst kademe motor arızası — yörüngeye ulaşılamadı' : 'Yakıt bitti — yörünge hızına ulaşılamadı';
         this.emit('msg', { text: 'Yörünge hızına ulaşılamadı! Üst kademe atmosfere geri düşüyor.', bad: true });
         c.ascent = 0; c.state = 'falling';
       }
     }
     deploy() {
-      if (this.phase !== 'orbit' || this.satsDeployed) return;
+      if (this.phase !== 'orbit' || this.deployed) return;
       const c = this.stack;
+      this.deployed = true;
       this.satsDeployed = this.satsPlanned;
       c.extraMass = 0;
       this.deployT = this.t;
-      this.emit('deploy', { craft: c, n: this.satsPlanned });
+      this.emit('deploy', { craft: c, n: this.satsPlanned, kind: this.payloadKind });
+      if (this.opts.shipReturn && this.key === 'ss') {
+        c.rec = { kind: 'shipcatch', target: 350, boost: false, entryBurn: false };
+        c.state = 'orbitcoast'; c.stateT = 0; c.ship = true;
+        c.cd = 1.1; c.area = 9 * 50;
+        this.emit('msg', { text: 'Ship dönüş için yörüngeden çıkış penceresini bekliyor' });
+      }
     }
 
     /* --- Booster kurtarma otomatı --- */
@@ -576,9 +632,47 @@
       const h = c.alt();
       const dr = c.downrange();
       const engs = b.def.engines;
-      const lowerTarget = rec.kind === 'catch' ? 40 : rec.kind === 'asds' ? 3 : 0;
+      const lowerTarget = (rec.kind === 'catch' || rec.kind === 'shipcatch') ? 40 : rec.kind === 'asds' ? 3 : 0;
+      const minThrL = b.def.landMinThr || (rec.kind === 'shipcatch' ? b.def.minThr : (this.opts.landMinThr || b.def.minThr));
       c.aLatE = 0;
       switch (c.state) {
+        case 'orbitcoast': {
+          // yörüngeden çıkış penceresi: ~120 m/s geri yanış sonrası çarpma noktası hedefin hemen önünde mi?
+          c.dirCmd = Math.atan2(-c.vy, -c.vx); c.rotRate = 6 * DEG;
+          if (!c.predT || c.t - c.predT > 2) {
+            c.predT = c.t;
+            const v = c.speed(), dv = 200;
+            const ghost = { x: c.x, y: c.y, vx: c.vx - dv * c.vx / v, vy: c.vy - dv * c.vy / v, mass: () => c.mass(), cd: c.cd, area: c.area };
+            c.deorbitMiss = predictImpact(ghost) - rec.target;
+            if (c.deorbitMiss < 0 && c.deorbitMiss > -600000 && c.stateT > 20) {
+              c.state = 'deorbit'; c.stateT = 0; c.v0 = v; this.emit('deorbit', { craft: c });
+            }
+          }
+          break;
+        }
+        case 'deorbit': {
+          c.dirCmd = Math.atan2(-c.vy, -c.vx);
+          if (Math.abs(wrapPi(c.dir - c.dirCmd)) < 5 * DEG) { b.firing = true; b.engFrac = 0.5; c.throttle = 0.15; }
+          if (b.firing && (!c.predT2 || c.t - c.predT2 > 0.1)) { c.predT2 = c.t; c.deorbitMiss = predictImpact(c) - rec.target; }
+          if ((b.firing && c.deorbitMiss < 12000 && c.deorbitMiss > -300000) || c.v0 - c.speed() >= 260 || b.prop < b.def.prop * 0.012) {
+            b.firing = false; c.state = 'reentry'; c.stateT = 0; c.rotRate = 8 * DEG;
+            this.emit('deorbitEnd', { craft: c });
+          }
+          break;
+        }
+        case 'reentry': {
+          // göbek üstü süzülme: gövde akışa dik
+          const ra = c.retroAng();
+          const a1 = ra + Math.PI / 2, a2 = ra - Math.PI / 2, ua = c.upAng();
+          c.dirCmd = Math.abs(wrapPi(a1 - ua)) < Math.abs(wrapPi(a2 - ua)) ? a1 : a2;
+          if (h < 80000) {
+            if (!c.glT || c.t - c.glT > 0.5) { c.glT = c.t; c.glMiss = predictImpact(c, lowerTarget) - rec.target; }
+            const aMax = Math.min(12, c.q / 500);
+            if (isFinite(c.glMiss)) c.aLatE = clamp(-c.glMiss * 0.0006, -aMax, aMax);
+          }
+          if (h < 9000 && c.vUp() < 0) { c.state = 'final'; c.stateT = 0; this.emit('final', { craft: c }); }
+          break;
+        }
         case 'coast': {
           if (c.stateT > 0.3 && !c.finsOut) { c.finsOut = true; this.emit('gridfins', { craft: c }); }
           if (rec.boost) {
@@ -630,17 +724,25 @@
           break;
         }
         case 'final': {
+          if (rec.kind === 'ocean' && c.burnLit) rec.target = dr + c.vEast() * 0.6;
           const hEff = h - lowerTarget;
           const m = c.mass();
           const g = MU / (c.r() ** 2);
           const vz = c.vUp();
           const nE1 = b.def.landEngines / engs;
           const nS = (b.def.landStart || b.def.landEngines) / engs;
-          const Tl = (b.def.thrVac - (b.def.thrVac - b.def.thrSL) * pres(h));
-          if (h < 1800 && !c.legsOut && rec.kind !== 'catch') { c.legsOut = true; this.emit('legs', { craft: c }); }
+          const LF = b.def.landThrFrac || 1;
+          const Tl = (b.def.thrVac - (b.def.thrVac - b.def.thrSL) * pres(h)) * LF * (b.health || 1);
+          if (h < 1800 && !c.legsOut && rec.kind !== 'catch' && rec.kind !== 'shipcatch') { c.legsOut = true; this.emit('legs', { craft: c }); }
           if (!c.burnLit) {
-            c.dirCmd = c.retroAng();
-            this.gridFins(c, rec, lowerTarget);
+            if (c.ship) {
+              const ra = c.retroAng(), a1 = ra + Math.PI / 2, a2 = ra - Math.PI / 2, ua = c.upAng();
+              c.dirCmd = Math.abs(wrapPi(a1 - ua)) < Math.abs(wrapPi(a2 - ua)) ? a1 : a2;
+              this.gridFins(c, rec, lowerTarget, 1.6);
+            } else {
+              c.dirCmd = c.retroAng();
+              this.gridFins(c, rec, lowerTarget);
+            }
             // durma irtifası tahmini (tam gaz / %80)
             if (!c.stopT || c.t - c.stopT > 0.1) {
               c.stopT = c.t;
@@ -649,7 +751,7 @@
             }
             c.burnRatio = clamp(1 - c.stop80 / Math.max(50, hEff), 0, 2);
             const auto = this.autoLand || c.id !== this.focusId;
-            if (auto && c.stop80 <= 40 && hEff < 7000) { c.burnLit = true; this.emit('landingBurn', { craft: c }); }
+            if (auto && c.stop80 <= (c.ship ? 650 : 40) && hEff < 7000) { c.burnLit = true; this.emit('landingBurn', { craft: c }); if (c.ship) this.emit('flip', { craft: c }); }
           }
           if (c.burnLit && b.prop > 0) {
             // gerekirse 3 motorla başla, sonra tek motora düş
@@ -669,17 +771,18 @@
             if (hEff < 7) aH = clamp(-0.06 * dx - 1.5 * vh, -0.1 * aT, 0.1 * aT);
             aV = Math.max(0.2, aV);
             let thr = Math.hypot(aV, aH) / aT;
-            if (thr < b.def.minThr * 0.5 && hEff > 30) { b.firing = false; } else { b.firing = true; thr = clamp(thr, b.def.minThr, 1); }
-            c.throttle = thr;
+            if (thr < minThrL * 0.5 && hEff > 30) { b.firing = false; } else { b.firing = true; thr = clamp(thr, minThrL, 1); }
+            c.throttle = thr * LF;
+            if (c.ship && Math.abs(wrapPi(c.dir - c.dirCmd)) > 12 * DEG) c.throttle = minThrL * LF; // çevrilme sırasında
             const u = c.up(), e = c.east();
-            c.dirCmd = Math.atan2(u[1] * aV + e[1] * aH, u[0] * aV + e[0] * aH); c.rotRate = 25 * DEG;
+            c.dirCmd = Math.atan2(u[1] * aV + e[1] * aH, u[0] * aV + e[0] * aH); c.rotRate = c.ship ? 45 * DEG : 25 * DEG;
             // aerodinamik ızgara kanatçıkları hâlâ etkili
             this.gridFins(c, rec, lowerTarget, 0.5);
           } else if (c.burnLit && b.prop <= 0) {
             b.firing = false;
             if (!c.fuelOut) { c.fuelOut = true; this.emit('msg', { text: c.name + ': Yakıt bitti!', bad: true }); }
           }
-          if (rec.kind === 'catch') this.tryCatch(c, false);
+          if (rec.kind === 'catch' || rec.kind === 'shipcatch') this.tryCatch(c, false);
           break;
         }
       }
@@ -692,7 +795,7 @@
       const tgo = Math.max(5, (h - lowerTarget) / -vz * 1.15);
       const dx = c.downrange() - rec.target;
       const vhDes = -dx / tgo;
-      const aMax = Math.min(25, c.q / 900) * (scale || 1);
+      const aMax = Math.min(25 * Math.max(1, scale || 1), c.q / 900 * (scale || 1));
       c.aLatE = clamp((vhDes - c.vEast()) * 0.5, -aMax, aMax);
     }
     tryCatch(c, manual) {
@@ -705,7 +808,7 @@
       if (ok && (manual || (auto && hEff < 3))) {
         c.caught = true; c.parts[0].firing = false; c.throttle = 0;
         c.result = 'caught';
-        this.emit('caught', { craft: c, dx });
+        this.emit('caught', { craft: c, dx, ship: !!c.ship });
       } else if (manual && !ok) {
         this.emit('msg', { text: 'Kollar kapatılamaz — booster yakalama bölgesinde değil!', bad: true });
       }
@@ -717,23 +820,43 @@
       const h = c.alt();
       const dr = c.downrange();
       // yeniden girişte parçalanma (korumasız aşamalar)
-      const heatLimit = c.type === 'fairing' ? Infinity : (c.rec ? 1.4e10 : 1.6e9);
+      const heatLimit = (c.type === 'fairing' || c.ship) ? Infinity : (c.rec ? 1.4e10 : 1.6e9);
       if (c.heatLoad > heatLimit && h < 80000) {
         this.explode(c, c.name + ' yeniden girişte aşırı ısındı ve parçalandı', true);
         return;
       }
       let ground = 0;
       for (const s of this.structures) if (Math.abs(dr - s.d) < s.r) ground = Math.max(ground, s.top);
-      if (this.shipD !== undefined && Math.abs(dr - this.shipD) < 46) ground = Math.max(ground, 3);
+      let deckV = 0;
+      if (this.shipD !== undefined && Math.abs(dr - this.shipD) < 46) {
+        const ph = this.t * 2 * Math.PI / 9;
+        ground = Math.max(ground, 3 + this.waves * 0.5 * Math.sin(ph));
+        deckV = this.waves * 0.5 * 2 * Math.PI / 9 * Math.cos(ph);
+      }
       if (h <= ground && c.t > 1 && c.vUp() <= 0) {
-        if (c.type === 'fairing') { c.alive = false; return; }
-        const vz = c.vUp(), vh = c.vEast();
+        const vz = c.vUp() - deckV, vh = c.vEast();
+        if (c.type === 'fairing') {
+          if (c.fairingRec && c.chute) {
+            c.landed = true;
+            const ok = Math.random() < clamp(0.88 - this.waves * 0.12, 0.2, 0.9);
+            c.result = ok ? 'fairingOk' : 'fairingWet';
+            this.emit('fairingRec', { craft: c, ok });
+          } else c.alive = false;
+          return;
+        }
         const rec = c.rec;
         const tilt = Math.abs(c.pitchFromVertical());
-        if (rec && rec.kind !== 'catch') {
+        if (rec && rec.kind === 'ocean') {
+          if (Math.abs(vz) < 9 && Math.abs(vh) < 9 && tilt < 25 * DEG) {
+            c.landed = true; c.splashed = true; c.result = 'splash'; c.parts[0].firing = false; c.throttle = 0;
+            this.emit('splashdown', { craft: c, vz });
+          } else this.explode(c, c.name + ' okyanusa sert çarptı (' + Math.abs(vz).toFixed(0) + ' m/s)', false, true);
+          return;
+        }
+        if (rec && rec.kind !== 'catch' && rec.kind !== 'shipcatch') {
           const dx = dr - rec.target;
           const padR = rec.kind === 'asds' ? 40 : 45;
-          if (Math.abs(vz) < 7.5 && Math.abs(vh) < 6 && tilt < 15 * DEG && Math.abs(dx) < padR) {
+          if (Math.abs(vz) < 8 && Math.abs(vh) < 6 && tilt < 15 * DEG && Math.abs(dx) < padR) {
             c.landed = true; c.result = 'landed'; c.parts[0].firing = false; c.throttle = 0;
             const r = RE + ground, a = c.upAng(); c.x = r * Math.cos(a); c.y = r * Math.sin(a);
             this.emit('landed', { craft: c, dx, vz });
@@ -752,7 +875,7 @@
       for (const p of c.parts) p.firing = false;
       this.emit('explode', { craft: c, why, reentry: !!reentry, ground: !!ground });
       this.emit('msg', { text: why, bad: true });
-      if (c === this.stack) {
+      if (c === this.stack && !this.deployed) {
         this.phase = 'failed';
         this.failReason = why;
       }
@@ -762,32 +885,39 @@
       if (this.result) return;
       const s = this.stack;
       if (this.phase === 'meco' && this.mecoT && this.t - this.mecoT > 2.5) this.stageSep();
-      if (this.phase === 'orbit' && !this.satsDeployed && this.t - this.orbitT > 8 && this.autoDeploy !== false) this.deploy();
-      const recs = this.crafts.filter(c => c.rec);
+      if (this.phase === 'orbit' && !this.deployed && this.t - this.orbitT > 8 && this.autoDeploy !== false) this.deploy();
+      const recs = this.crafts.filter(c => c.rec || c.fairingRec);
       const pending = recs.filter(c => c.alive && !c.landed && !c.caught);
       const done = pending.length === 0;
       if ((this.phase === 'failed' || this.phase === 'failed2') && (done || this.t - (this.failT || (this.failT = this.t)) > 25)) {
         if (this.phase === 'failed2' && s.alive && s.alt() > 0 && this.t - this.failT < 25) return;
         this.finish(false);
       }
-      if (this.phase === 'orbit' && this.satsDeployed && this.t - this.deployT > 6 && done) this.finish(true);
+      if (this.phase === 'orbit' && this.deployed && this.t - this.deployT > 6 && done) this.finish(true);
+      // Ship dönüşü sırasında üst kademe kaybı görevi başarısız yapmaz (yük bırakıldı)
     }
     finish(ok) {
       const recs = this.allRecovered();
+      const cr = this.crafts;
       this.result = {
-        ok, sats: ok ? this.satsDeployed : 0,
+        ok, partial: !!this.partial, sats: ok ? this.satsDeployed : 0, kind: this.payloadKind,
         recovered: recs.ok, lost: recs.lost, reason: ok ? null : (this.failReason || this.failUpper || 'Görev başarısız'),
         orbit: ok ? this.stack.orbit() : null, t: this.t,
+        boosters: cr.filter(c => c.rec && !c.ship).map(c => ({ name: c.name, type: c.type, side: c.side, kind: c.rec.kind, result: c.landed && !c.splashed ? 'landed' : c.caught ? 'caught' : c.splashed ? 'splash' : 'lost' })),
+        expended: cr.filter(c => c.state === 'expended').length,
+        ship: this.opts.shipReturn ? (this.stack.caught ? 'caught' : 'lost') : null,
+        fairings: cr.filter(c => c.fairingRec).map(c => c.result === 'fairingOk'),
+        engineOut: !!(this.engineFail && this.engineFail.done),
       };
       this.emit('end', this.result);
     }
     allRecovered() {
       let ok = 0, lost = 0;
-      for (const c of this.crafts) if (c.rec) { if (c.landed || c.caught) ok++; else lost++; }
+      for (const c of this.crafts) if (c.rec && !c.ship) { if ((c.landed && !c.splashed) || c.caught) ok++; else lost++; }
       // patlayanlar listeden silinmez ama alive=false
       return { ok, lost };
     }
   }
 
-  global.SIM = { W_E, padAng, now: () => NOW, GUID, G0, MU, RE, PAD_ANG, SAT_MASS, DEG, ROCKETS, MODE_NAMES, Mission, Craft, orbitOf, rho, pres, predictImpact, clamp, wrapPi };
+  global.SIM = { windAt, setWind: w => { WIND = w; }, W_E, padAng, now: () => NOW, GUID, G0, MU, RE, PAD_ANG, SAT_MASS, DEG, ROCKETS, MODE_NAMES, Mission, Craft, orbitOf, rho, pres, predictImpact, clamp, wrapPi };
 })(typeof window !== 'undefined' ? window : globalThis);
