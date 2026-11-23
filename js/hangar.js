@@ -112,6 +112,12 @@ window.HANGAR = (function () {
     if (plan.reward) h += `<div class="kv"><span>Sözleşme ödülü</span><b style="color:var(--good)">${money(plan.reward)}</b></div>`;
     h += '</div></div>';
     if (plan.reasons.length) h += '<div class="reasons">' + plan.reasons.map(r => `<div>${esc(r)}</div>`).join('') + '</div>';
+    const I0 = P.ROCKET_INFO[plan.rocket];
+    const needCore = P.readyCores(I0.core).length < I0.cores, needShip = plan.rocket === 'ss' && !P.readyCores('ship').length;
+    if (needCore || needShip) {
+      const t = needCore ? I0.core : 'ship', o = P.coreOrderInfo(t);
+      h += `<button class="btn warn" id="b-order" style="margin-top:6px" ${st.money >= o.cost ? '' : 'disabled'}>${esc(P.CORE_INFO[t].name)} sipariş et · ${money(o.cost)} · ${o.weeks} hafta</button>`;
+    }
     h += `<button id="b-launch" class="big-btn" ${plan.ok ? '' : 'disabled'}>🚀 FIRLAT</button>`;
     body.innerHTML = h;
     body.querySelectorAll('[data-rocket]').forEach(e => e.onclick = () => { const k = e.dataset.rocket; if (k === 'f1' || P.has(P.ROCKET_INFO[k].research)) { P.setSel({ rocket: k }); render(); hooks.onSelect && hooks.onSelect(); } });
@@ -127,6 +133,8 @@ window.HANGAR = (function () {
     chk('o-auto', v => { st.opts.autopilot = v; });
     chk('o-land', v => { st.opts.autoLand = v; });
     chk('o-cam', v => { st.opts.cinematic = v; });
+    const bo = $('b-order');
+    if (bo) bo.onclick = () => { const I0 = P.ROCKET_INFO[plan.rocket]; const t = P.readyCores(I0.core).length < I0.cores ? I0.core : 'ship'; if (P.orderCore(t)) render(); };
     const b = $('b-launch');
     if (b) b.onclick = () => {
       const pl = P.plan();
