@@ -316,8 +316,8 @@
       const c = this.focus();
       switch (name) {
         case 'pitch': if (c && c.manual) { c.dirCmd = c.dir + arg; } break;
-        case 'throttle': if (c && c.manual) c.throttle = clamp(c.throttle + arg, 0, 1); break;
-        case 'throttleSet': if (c && c.manual) c.throttle = clamp(arg, 0, 1); break;
+        case 'throttle': if (c && c.manual) { if (c.manualLand) c.manThr = clamp((c.manThr || 0) + arg, 0, 1); else c.throttle = clamp(c.throttle + arg, 0, 1); } break;
+        case 'throttleSet': if (c && c.manual) { if (c.manualLand) c.manThr = clamp(arg, 0, 1); else c.throttle = clamp(arg, 0, 1); } break;
         case 'autopilot':
           this.autopilot = !this.autopilot;
           for (const k of this.crafts) if (k.ascent) k.manual = !this.autopilot;
@@ -345,6 +345,7 @@
 
     /* --- ana adım --- */
     step(dt) {
+      if (this.holding) return;
       this.t += dt; NOW = this.t;
       const s = this.stack;
       if (this.phase === 'countdown') {
@@ -661,6 +662,7 @@
           break;
         }
         case 'reentry': {
+          if (this.opts.burnThrough && c.heat > 1.5e8 && c.alive) { this.explode(c, 'Isı kalkanı delindi — Ship yeniden girişte parçalandı', true); return; }
           // göbek üstü süzülme: gövde akışa dik
           const ra = c.retroAng();
           const a1 = ra + Math.PI / 2, a2 = ra - Math.PI / 2, ua = c.upAng();
@@ -734,6 +736,19 @@
           const LF = b.def.landThrFrac || 1;
           const Tl = (b.def.thrVac - (b.def.thrVac - b.def.thrSL) * pres(h)) * LF * (b.health || 1);
           if (h < 1800 && !c.legsOut && rec.kind !== 'catch' && rec.kind !== 'shipcatch') { c.legsOut = true; this.emit('legs', { craft: c }); }
+          // ELLE İNİŞ: 3 km altında gaz ve yönelim tamamen oyuncuda
+          if (this.opts.manualLanding && !c.ship && (c.manualLand || (c.id === this.focusId && h < 3000))) {
+            if (!c.manualLand) { c.manualLand = true; c.manual = true; c.manThr = 0; c.rotRate = 22 * DEG; this.emit('manualTakeover', { craft: c }); }
+            b.engFrac = nS;
+            const on = (c.manThr || 0) > 0.02 && b.prop > 0;
+            b.firing = on;
+            if (on && !c.burnLit) { c.burnLit = true; c.manualBurn = true; this.emit('landingBurn', { craft: c }); }
+            c.throttle = on ? Math.max(minThrL, c.manThr) * LF : 0;
+            if (!c.stopT || c.t - c.stopT > 0.1) { c.stopT = c.t; c.stop100 = stopAlt(c, Tl * nS, hEff); c.stop80 = stopAlt(c, Tl * nS * 0.8, hEff); }
+            this.gridFins(c, rec, lowerTarget, 0.6);
+            if (rec.kind === 'catch') this.tryCatch(c, false);
+            break;
+          }
           if (!c.burnLit) {
             if (c.ship) {
               const ra = c.retroAng(), a1 = ra + Math.PI / 2, a2 = ra - Math.PI / 2, ua = c.upAng();
@@ -807,7 +822,7 @@
       const auto = this.autoLand || c.id !== this.focusId;
       if (ok && (manual || (auto && hEff < 3))) {
         c.caught = true; c.parts[0].firing = false; c.throttle = 0;
-        c.result = 'caught';
+        c.result = 'caught'; c.landDx = dx;
         this.emit('caught', { craft: c, dx, ship: !!c.ship });
       } else if (manual && !ok) {
         this.emit('msg', { text: 'Kollar kapatılamaz — booster yakalama bölgesinde değil!', bad: true });
@@ -857,7 +872,8 @@
           const dx = dr - rec.target;
           const padR = rec.kind === 'asds' ? 40 : 45;
           if (Math.abs(vz) < 8 && Math.abs(vh) < 6 && tilt < 15 * DEG && Math.abs(dx) < padR) {
-            c.landed = true; c.result = 'landed'; c.parts[0].firing = false; c.throttle = 0;
+            c.landed = true; c.result = 'landed'; c.parts[0].firing = false; c.throttle = 0; c.landDx = dx;
+            if (this.opts.tipOver && rec.kind === 'asds') c.tipAt = this.t + 4;
             const r = RE + ground, a = c.upAng(); c.x = r * Math.cos(a); c.y = r * Math.sin(a);
             this.emit('landed', { craft: c, dx, vz });
             return;
@@ -893,7 +909,19 @@
         if (this.phase === 'failed2' && s.alive && s.alt() > 0 && this.t - this.failT < 25) return;
         this.finish(false);
       }
-      if (this.phase === 'orbit' && this.deployed && this.t - this.deployT > 6 && done) this.finish(true);
+      for (const c of this.crafts) if (c.tipAt && !c.tipped && this.t > c.tipAt) { c.tipped = true; c.result = 'tipped'; this.emit('tipover', { craft: c }); this.emit('msg', { text: c.name + ' sert dalgada drone gemi üzerinde devrildi!', bad: true }); }
+      const wantUpper = this.opts.deorbitUpper && this.key !== 'ss' && this.key !== 'f1' && this.payloadKind !== 'moon' && this.payloadKind !== 'mars';
+      if (wantUpper && this.deployed && !this.upperDone && s.alive) {
+        const up = s.parts[0];
+        if (!this.upperBurn && this.t - this.deployT > 5) { this.upperBurn = this.t; s.rotRate = 8 * DEG; this.emit('upperDeorbit', { craft: s }); }
+        if (this.upperBurn) {
+          s.dirCmd = Math.atan2(-s.vy, -s.vx);
+          const aligned = Math.abs(wrapPi(s.dir - s.dirCmd)) < 6 * DEG;
+          if (up) { up.firing = aligned && up.prop > 0 && this.t - this.upperBurn < 28; s.throttle = 0.4; }
+          if (this.t - this.upperBurn > 28) { if (up) up.firing = false; this.upperDone = true; this.emit('upperDeorbitEnd', { craft: s }); }
+        }
+      }
+      if (this.phase === 'orbit' && this.deployed && this.t - this.deployT > 6 && done && (!wantUpper || this.upperDone || !s.alive)) this.finish(true);
       // Ship dönüşü sırasında üst kademe kaybı görevi başarısız yapmaz (yük bırakıldı)
     }
     finish(ok) {
@@ -903,7 +931,7 @@
         ok, partial: !!this.partial, sats: ok ? this.satsDeployed : 0, kind: this.payloadKind,
         recovered: recs.ok, lost: recs.lost, reason: ok ? null : (this.failReason || this.failUpper || 'Görev başarısız'),
         orbit: ok ? (this.deployOrbit || this.stack.orbit()) : null, t: this.t,
-        boosters: cr.filter(c => c.rec && !c.ship).map(c => ({ name: c.name, type: c.type, side: c.side, kind: c.rec.kind, result: c.landed && !c.splashed ? 'landed' : c.caught ? 'caught' : c.splashed ? 'splash' : 'lost' })),
+        boosters: cr.filter(c => c.rec && !c.ship).map(c => ({ name: c.name, type: c.type, side: c.side, kind: c.rec.kind, manual: !!c.manualLand, dx: c.landDx, result: c.tipped ? 'tipped' : c.landed && !c.splashed ? 'landed' : c.caught ? 'caught' : c.splashed ? 'splash' : 'lost' })),
         expended: cr.filter(c => c.state === 'expended').length,
         ship: this.opts.shipReturn ? (this.stack.caught ? 'caught' : 'lost') : null,
         fairings: cr.filter(c => c.fairingRec).map(c => c.result === 'fairingOk'),
@@ -913,7 +941,7 @@
     }
     allRecovered() {
       let ok = 0, lost = 0;
-      for (const c of this.crafts) if (c.rec && !c.ship) { if ((c.landed && !c.splashed) || c.caught) ok++; else lost++; }
+      for (const c of this.crafts) if (c.rec && !c.ship) { if ((c.landed && !c.splashed && !c.tipped) || c.caught) ok++; else lost++; }
       // patlayanlar listeden silinmez ama alive=false
       return { ok, lost };
     }
