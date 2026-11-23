@@ -160,7 +160,7 @@
       fragmentShader: `#include <common>
         #include <logdepthbuf_pars_fragment>
         uniform vec3 sun; varying vec3 vN; varying vec3 vV; varying vec3 vWN;
-        void main(){ float f = 1.0 - abs(dot(vN, vV)); float i = pow(f, 3.0);
+        void main(){ float f = 1.0 - abs(dot(vN, vV)); float i = pow(f, 5.0) * 0.8;
           float day = clamp(dot(vWN, sun)*1.2+0.35, 0.0, 1.0);
           vec3 col = mix(vec3(0.25,0.5,1.0), vec3(0.55,0.8,1.0), f)*day;
           gl_FragColor = vec4(col*i*1.6, i);
@@ -168,7 +168,7 @@
         }`,
       side: T.BackSide, blending: T.AdditiveBlending, transparent: true, depthWrite: false,
     });
-    atmo = new T.Mesh(new T.SphereGeometry(RE * 1.028, 128, 64), atmoMat);
+    atmo = new T.Mesh(new T.SphereGeometry(RE * 1.014, 128, 64), atmoMat);
     scene.add(atmo);
     // yıldızlar
     const sg = new T.BufferGeometry(), N = 4000, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
@@ -230,10 +230,9 @@
     const nz = vnoise(e / 900, n / 900, 3.3) * 0.6 + vnoise(e / 160, n / 160, 8.1) * 0.4;
     if (e > ce) {
       const dpt = clamp((e - ce) / 30000, 0, 1);
-      if (e - ce < 60) return [0.78, 0.74, 0.6];
       return [lerp(0.07, 0.02, dpt), lerp(0.25, 0.09, dpt), lerp(0.32, 0.2, dpt)];
     }
-    if (ce - e < 140) return [0.8, 0.75, 0.6];
+    if (ce - e < 400) return [0.42, 0.42, 0.3];
     // lagün
     const lag = vnoise(e / 4000 + 9, n / 4000, 1.7);
     if (lag > 0.72 && e < ce - 1500) return [0.08, 0.22, 0.26];
@@ -832,6 +831,7 @@
   /* --- Patlama ve parçalanma --- */
   function explodeFX(c, why, reentry) {
     const v = vis.get(c.id);
+    c.deadEF = toEF(c.x, c.y); c.deadDir = c.dir + efRot();
     const e = v && v.ef ? v.ef : toEF(c.x, c.y);
     const ax = v ? axisOf(v) : [0, 1];
     const a = efRot(), ca = Math.cos(a), sa = Math.sin(a);
@@ -1141,8 +1141,9 @@
     const c = focusCraft();
     let fx, fy;
     if (c) {
-      const e = toEF(c.x, c.y);
-      const da = c.dir + efRot();
+      if (!c.alive && !c.deadEF) { c.deadEF = toEF(c.x, c.y); c.deadDir = c.dir + efRot(); }
+      const e = c.deadEF || toEF(c.x, c.y);
+      const da = c.deadEF ? c.deadDir : c.dir + efRot();
       const ax = [Math.cos(da), Math.sin(da)];
       const L = c.length || 20;
       fx = e[0] + ax[0] * L * 0.45; fy = e[1] + ax[1] * L * 0.45;
@@ -1311,7 +1312,7 @@
       case 'caught': log(nm + ' KULE TARAFINDAN YAKALANDI!', 'good'); banner('YAKALANDI!', 'good'); state.recovered++; autoCamTimer = 7; landFX(c); break;
       case 'explode': explodeFX(c, d.why, d.reentry); if (c.id === camFocusId) autoCamTimer = 6; break;
       case 'msg': log(d.text, d.bad ? 'bad' : ''); if (d.bad) banner(d.text.length > 48 ? d.text.slice(0, 46) + '…' : d.text, 'bad'); break;
-      case 'end': clearTimeout(endTimer); endTimer = setTimeout(() => showResult(d), 3500); break;
+      case 'end': clearTimeout(endTimer); endTimer = setTimeout(() => showResult(d), d.ok ? 3500 : 7000); break;
     }
   }
   function puffs(c, kind) {
@@ -1327,9 +1328,9 @@
     const v = vis.get(c.id); if (!v || !v.ef) return;
     const ax = axisOf(v), e = v.ef, big = mission.key === 'ss' ? 2.5 : 1;
     // tahliye buharı
-    for (let i = 0; i < 80; i++) {
-      const y = rnd(0.4, 0.95) * c.length;
-      smokeP.spawn(e[0] + ax[0] * y, e[1] + ax[1] * y, 0, rnd(-6, 6), rnd(-6, 6), rnd(-6, 6), rnd(3, 8), 2 * big, 18 * big, [1, 1, 1], [0.9, 0.9, 0.92], 0.5, 0, 0.6, -0.8);
+    for (let i = 0; i < 30; i++) {
+      const y = rnd(0.5, 0.95) * c.length;
+      smokeP.spawn(e[0] + ax[0] * y, e[1] + ax[1] * y, rnd(-1, 1) * big, rnd(-4, 4), rnd(-4, 4), rnd(-4, 4), rnd(2, 5), 1.5 * big, 10 * big, [1, 1, 1], [0.9, 0.9, 0.92], 0.35, 0, 0.6, -0.8);
     }
   }
 
