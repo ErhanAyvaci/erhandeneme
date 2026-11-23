@@ -51,7 +51,8 @@ button { font-family: inherit; cursor: pointer; }
 .tabs { display: flex; gap: 4px; padding: 8px 22px 0; flex-wrap: wrap; }
 .tabs button { background: rgba(8,14,26,0.8); border: 1px solid var(--line); border-bottom: none; color: var(--muted); padding: 8px 13px; border-radius: 8px 8px 0 0; font-size: 13px; }
 .tabs button.sel { color: var(--text); background: rgba(16,28,48,0.95); border-color: rgba(79,195,255,0.5); }
-.hg-main { flex: 1; min-height: 0; display: flex; gap: 10px; pointer-events: none; }
+.hg-main { flex: 1; min-height: 0; display: flex; gap: 10px; }
+#hangar > .hg-main { pointer-events: none; }
 .hg-main > .tab-body { pointer-events: auto; }
 .tab-body { width: min(760px, 100%); margin-left: 22px; min-height: 0; overflow-y: auto; background: rgba(10,18,32,0.9); border: 1px solid var(--line); border-radius: 0 10px 10px 10px; padding: 14px 16px; margin-bottom: 6px; }
 .tab-body.wide { width: calc(100% - 44px); }
@@ -264,6 +265,8 @@ table.tbl td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.05)
   .preview { display: none; }
   .bcast { display: none; }
   .pip-frame, .pip-label { display: none; }
-  .manual-panel { width: 92vw; top: auto; bottom: 118px; left: 4vw; }
+  .manual-panel { width: 165px; top: 215px; left: 6px; font-size: 10px; padding: 6px 8px; }
+  .manual-panel .lp-hint { display: none; }
+  .pl-panel { top: 6px; width: 70vw; font-size: 11px; }
   .tut { max-width: 92vw; left: 4vw !important; }
 }

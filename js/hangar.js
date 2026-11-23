@@ -141,6 +141,7 @@ window.HANGAR = (function () {
     h += `<div class="wx"><div>🕑 ${String(w.hour).padStart(2, '0')}:00 ${w.hour < 6 || w.hour >= 19 ? '(gece)' : ''}</div><div>💨 Yer ${w.wind} m/s</div><div>🌀 Jet ${w.jet} m/s</div><div>🌊 Dalga ${w.waves} m</div><div>${w.storm ? '⛈ Fırtına' : w.rain ? '🌧 Yağmur' : w.fog ? '🌫 Sis' : '☁'} %${w.cloud}</div></div>`;
     for (const r of plan.risks) h += `<div class="pill ${r.level}">${esc(r.text)}</div>`;
     if (!plan.risks.length) h += '<div class="pill good">Hava fırlatma için uygun</div>';
+    else h += `<div><button class="btn" id="b-scrub" ${(st.scrubs || 0) < P.SCRUB_MAX && st.money >= P.SCRUB_COST ? '' : 'disabled'}>⏭ Pencereyi 24 saat ertele (${money(P.SCRUB_COST)} · ${P.SCRUB_MAX - (st.scrubs || 0)} hak)</button></div>`;
     h += `<div class="pill ${plan.failChance > 0.06 ? 'warn' : ''}">${plan.engineMsg}</div>`;
     h += `<div class="pill">Motor stoku: ${st.stock.merlin} Merlin${P.has('r_raptor') ? ` · ${st.stock.raptor} Raptor` : ''}</div>`;
     h += '</div><div><h3>Görev özeti</h3>';
@@ -181,6 +182,7 @@ window.HANGAR = (function () {
     chk('o-bc', v => { st.opts.broadcast = v; });
     chk('o-snd', v => { st.opts.muted = !v; hooks.onSettings && hooks.onSettings(); });
     body.querySelectorAll('[data-q]').forEach(e => e.onclick = () => { st.opts.quality = e.dataset.q; st.opts.autoQuality = false; P.save(); hooks.onSettings && hooks.onSettings(); render(); });
+    const bs = $('b-scrub'); if (bs) bs.onclick = () => { if (P.scrubDay()) render(); };
     const bo = $('b-order');
     if (bo) bo.onclick = () => { const I1 = P.ROCKET_INFO[plan.rocket]; const t = P.readyCores(I1.core).length < I1.cores ? I1.core : 'ship'; if (P.orderCore(t)) render(); };
     const b = $('b-launch');
@@ -501,7 +503,7 @@ window.HANGAR = (function () {
     if (API) {
       const msg = t => { $('cl-msg').innerHTML = t; };
       $('cl-save').onclick = () => fetch(API + 'save', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: st.cloudCode || null, data: st }) }).then(r => r.json()).then(j => { if (j.code) { st.cloudCode = j.code; P.save(); msg('Kaydedildi — kod: <b>' + esc(j.code) + '</b>'); } else msg(esc(j.error || 'Hata')); }).catch(() => msg('Sunucuya ulaşılamadı'));
-      $('cl-load').onclick = () => { const c = $('cl-code').value.trim(); if (!c) return; fetch(API + 'save?code=' + encodeURIComponent(c)).then(r => r.json()).then(j => { if (j.data && P.importState(j.data)) { P.state.cloudCode = c; P.save(); render(); hooks.onWeek && hooks.onWeek(); msg('Yüklendi'); } else msg(esc(j.error || 'Bulunamadı')); }).catch(() => msg('Sunucuya ulaşılamadı')); };
+      $('cl-load').onclick = () => { const c = $('cl-code').value.trim().toUpperCase(); if (!c) return; fetch(API + 'save?code=' + encodeURIComponent(c)).then(r => r.json()).then(j => { if (j.data && P.importState(j.data)) { P.state.cloudCode = c; P.save(); render(); hooks.onWeek && hooks.onWeek(); msg('Yüklendi'); } else msg(esc(j.error || 'Bulunamadı')); }).catch(() => msg('Sunucuya ulaşılamadı')); };
       $('lb-send').onclick = () => fetch(API + 'leaderboard', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: $('lb-name').value || 'Anonim', weeks: st.achievements.a_win || st.week, difficulty: st.difficulty, value: Math.round(P.valuation() * st.ownership) }) }).then(r => r.json()).then(loadLb).catch(() => {});
       const loadLb = () => fetch(API + 'leaderboard').then(r => r.json()).then(j => { const el = $('lb'); if (!el) return; el.innerHTML = j.error ? `<div class="muted" style="font-size:12px">${esc(j.error)}</div>` : '<table class="tbl"><tr><th>#</th><th>İsim</th><th>Hafta</th><th>Zorluk</th><th>Hisse değeri</th></tr>' + (j.items || []).map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.name)}</td><td>${x.weeks}</td><td>${esc((P.DIFFICULTY[x.difficulty] || {}).name || x.difficulty)}</td><td>${money(x.value)}</td></tr>`).join('') + '</table>'; }).catch(() => {});
       loadLb();

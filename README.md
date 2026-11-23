@@ -11,7 +11,7 @@ Amacın: uydu ağınla **dünya nüfusunun %95'ine internet** ulaştırmak.
 
 ## Vercel'e yükleme
 
-Proje saf statik bir sitedir (derleme adımı yok). `vercel.json` önbellek başlıklarını ve temiz URL'leri ayarlar.
+Proje statik bir sitedir (derleme adımı yok); `api/` klasöründeki iki küçük fonksiyon isteğe bağlı bulut kaydı içindir. `vercel.json` önbellek başlıklarını ve temiz URL'leri ayarlar.
 
 1. <https://vercel.com/new> → **Import Git Repository** → bu repoyu seç.
 2. **Framework Preset:** `Other` · **Build Command:** boş · **Output Directory:** boş (kök dizin) · **Install Command:** boş.
@@ -75,14 +75,45 @@ Starbase (Starship + 2 Mechazilla kulesi), drone gemiler, burun konisi gemisi.
 | `V` / `B` | Araçlar arası kamera |
 | `N` | Sinematik kamera (takip / yer / teleobjektif / araç üstü) |
 | `M` | Harita görünümü |
+| `I` | Bölünmüş ekran (booster ve üst kademe aynı anda) |
 | `,` / `.` | Zaman hızlandırma |
 | `K` | Uçuş sonlandırma (FTS) |
 | Fare / dokunmatik | Sürükle = döndür, tekerlek / iki parmak = yakınlaş |
-
 | `O` | Duraklat |
 | `U` | Sesi aç/kapat |
 
 Dokunmatik cihazlarda ekran düğmeleri otomatik görünür.
+
+## Şirket yönetimi (v3)
+
+- **Zorluk:** Kolay / Normal / Zor (başlangıç parası, arıza oranı, hava, rakip gücü, abone hedefi).
+- **Ar-Ge kuyruğu:** projeler haftalar sürer; mühendis sayısı hızı ve paralel laboratuvar sayısını belirler (maaşlar haftalık).
+- **Üretim darboğazları:** uydu, Merlin/Raptor motoru ve abone terminali fabrikaları ayrı kaynaklardır.
+- **Uydu kohortları:** uydular iyon iticiyle birkaç haftada kabuğa yükselir, ~5 yıl yaşar; sıkışık kabuklarda uzay çöpü ve çarpışma riski artar.
+- **Pazar:** bölge bazlı fiyat (düşük/normal/premium), ülke lisansları, yer istasyonu seviyeleri, düşük gecikme primi, askeri paket; iki yapay zekâ rakip pazar payı için yarışır.
+- **Olay kartları ve meydan okumalar:** güneş fırtınası, lisans reddi, grev, devlet ihalesi…; her hafta ödüllü bir görev.
+- **Finans:** Seri A/B/C ve halka arz, şirket değerlemesi, fırlatma sigortası, FAA soruşturması, müşteri itibarı, Starbase halk onayı.
+- **Filo:** booster isimlendirme, uçuş geçmişi, aşınma ve bakım politikası (hızlı/standart/titiz).
+- **Ay ve Mars:** tanker uçuşlarıyla yörünge deposunu doldur, HLS ile Ay'a, pencere açıkken Mars'a in (iniş sahnesini sen yönetirsin).
+- **Serbest mod:** her roketi, her ayarla, ekonomiyi etkilemeden dene.
+
+## Uçuş ve görseller (v3)
+
+- Geri sayım beklemesi (iptal → %85 iade / devam → arıza riski), elle iniş modu, drone gemide devrilme, Ship ısı kalkanı hasarı,
+  üst kademenin yörüngeden indirilmesi, Starship'in rampaya zarar vermesi.
+- Gerçek kıyı şeritleri: Cape Canaveral (Atlantik, Banana River, Indian River, Mosquito Lagoon) ve Boca Chica (Körfez, South Bay, Rio Grande).
+- Hava görselleri: alçak bulut katmanı, buluttan geçiş, yağmur, sis, şimşek.
+- Sıralı patlamalar ve yanan yakıt bulutu, alacakaranlıkta güneşle aydınlanan "denizanası" egzoz bulutu.
+- Türkçe sesli geri sayım ve anonslar, canlı yayın telemetri şeridi, bölünmüş ekran, hangarda dönen 3D roket önizlemesi, etkileşimli eğitim.
+
+## Altyapı
+
+- **Hızlı açılış:** düşük çözünürlüklü dokular sayfayla gelir, yüksek çözünürlük (`js/textures-hi.js`) arka planda yüklenir.
+- **PWA:** ana ekrana eklenebilir, service worker ile çevrimdışı oynanır (`manifest.webmanifest`, `sw.js`).
+- **Bulut kaydı ve sıralama:** `api/save.js`, `api/leaderboard.js` (Vercel Functions). Vercel projesine
+  **Storage → Upstash Redis (KV)** entegrasyonu eklendiğinde `KV_REST_API_URL` / `KV_REST_API_TOKEN` otomatik tanımlanır.
+  Yapılandırılmamışsa oyun normal çalışır, yalnızca bulut özellikleri devre dışı kalır.
+- **Testler:** `npm test` → fizik senaryoları (F1/F9/FH/Starship inişleri, GTO, devrilme, ısı kalkanı), ekonomi botu (her zorlukta kazanılabilirlik), API.
 
 ## Diğer özellikler
 
@@ -99,6 +130,9 @@ Dokunmatik cihazlarda ekran düğmeleri otomatik görünür.
 - `js/models.js` — detaylı prosedürel 3D modeller (roketler, Dragon, kuleler, gemiler)
 - `js/hangar.js` — kontrol merkezi sekmeleri
 - `js/game.js` — 3D sahne, efektler, kamera, HUD
-- `js/textures.js` — gömülü Dünya dokuları (NASA Blue Marble / Black Marble türevleri, kamu malı)
+- `js/textures.js`, `js/textures-hi.js` — gömülü Dünya dokuları (NASA Blue Marble / Black Marble türevleri, kamu malı)
+- `api/` — bulut kaydı ve sıralama (Vercel Functions)
+- `tests/` — `node --test` regresyon testleri, `tests/bot.js` otomatik oyuncu
+- `manifest.webmanifest`, `sw.js`, `icons/` — PWA
 - `vendor/three/` — Three.js r160 (MIT lisansı) ve kullanılan eklentiler
 - `vercel.json`, `favicon.svg` — dağıtım yapılandırması

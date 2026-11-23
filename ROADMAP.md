@@ -1,5 +1,9 @@
 # Yol Haritası
 
+## Durum
+
+Aşağıdaki planın tamamı (P1–P16) ve 30 ek önerinin tamamı v3 sürümünde uygulandı ✅
+
 ## Kabul edilen plan
 
 | # | Başlık | Kısa açıklama |
@@ -21,7 +25,7 @@
 | P15 | PWA | Ana ekrana ekleme, çevrimdışı oynama |
 | P16 | Otomatik testler | Fizik ve ekonomi regresyon testleri |
 
-## Ek öneriler (değerlendirilecek)
+## Ek öneriler (uygulandı)
 
 ### Ekonomi ve şirket yönetimi
 1. Yatırım turları ve halka arz — şirket değerlemesi, hisse satarak para toplama

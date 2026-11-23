@@ -393,7 +393,7 @@
 
   /* ---------------- Hava durumu ---------------- */
   function genWeather(st) {
-    const R = rng(st.seed + st.week * 7919);
+    const R = rng(st.seed + st.week * 7919 + (st.scrubs || 0) * 104729);
     const k = (DIFFICULTY[st.difficulty] || DIFFICULTY.normal).weather;
     const mk = (base) => {
       const jet = Math.round((12 + R() * 30 + (R() < 0.22 ? R() * 40 : 0)) * (0.8 + 0.2 * k));
@@ -419,6 +419,16 @@
     if (w.wind > 9 && plan && (plan.mode !== 'exp' || plan.shipReturn)) r.push({ level: w.wind > 13 ? 'bad' : 'warn', text: `Yer rüzgârı ${w.wind} m/s — iniş/yakalama riski` });
     if (w.fog) r.push({ level: 'warn', text: 'Sis — yer kameralarında görüş düşük' });
     return r;
+  }
+
+  /* fırlatma penceresi: hava kötüyse 24 saat ertele (haftada en fazla 2 kez) */
+  const SCRUB_COST = 0.4 * M, SCRUB_MAX = 2;
+  function scrubDay() {
+    if ((state.scrubs || 0) >= SCRUB_MAX || state.money < SCRUB_COST) return false;
+    state.scrubs = (state.scrubs || 0) + 1; state.money -= SCRUB_COST;
+    state.weather = genWeather(state);
+    log(`Fırlatma penceresi 24 saat ertelendi (${state.scrubs}/${SCRUB_MAX}) — yeni hava tahmini`);
+    save(); return true;
   }
 
   /* ---------------- Sözleşmeler & itibar ---------------- */
@@ -1132,7 +1142,7 @@
     state.depot = Math.max(0, state.depot * 0.985);
     state.padsUsed = {};
     state.launchesThisWeek = 0; state.successThisWeek = 0;
-    state.weather = genWeather(state);
+    state.scrubs = 0; state.weather = genWeather(state);
     state.contracts = genContracts(state);
     if (!state.challenge || state.challenge.done || state.week - state.challenge.week >= 1) state.challenge = genChallenge(state);
     maybeEvent();
@@ -1211,6 +1221,6 @@
     facilityNext, buildFacility, satRate, terminalRate, engineRate, refurbWeeks, coreOrderInfo, orderCore, readyCores, renameCore, enginesOk,
     network, buildStation, upgradeStation, applyLicense, setPrice, licensed, availableModes, payloadTypes, plan, commit, abortLaunch, applyResult, endWeek, markSuccess,
     advice, acceptContract, setSel, weatherRisks, failChance, maxFlights, log, resolveEvent, valuation, fundingOptions, raiseFunding, communityInvest, marsWindow,
-    sandboxCtx, tutorialAdvance, recomputeShells,
+    sandboxCtx, tutorialAdvance, recomputeShells, scrubDay, SCRUB_MAX, SCRUB_COST,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

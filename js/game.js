@@ -136,6 +136,21 @@
     texCache[key] = t;
     return t;
   }
+  // yüksek çözünürlüklü dokular arka planda yüklenir
+  let hiDayPending = null;
+  function upgradeTextures() {
+    const sc = document.createElement('script'); sc.src = 'js/textures-hi.js'; sc.async = true;
+    sc.onload = () => {
+      const H0 = window.TEX_HI || {};
+      for (const k of Object.keys(H0)) {
+        const t = texCache[k]; if (!t) continue;
+        const img = new Image();
+        img.onload = () => { t.image = img; t.needsUpdate = true; if (k === 'day') { if (mode === 'hangar') readDayPixels(img); else hiDayPending = img; } };
+        img.src = H0[k];
+      }
+    };
+    document.body.appendChild(sc);
+  }
   function readDayPixels(img) {
     try {
       const c = document.createElement('canvas'); c.width = 2048; c.height = 1024;
@@ -1360,6 +1375,24 @@
       droneShipV.g.translateY(mission.waves * 0.5 * Math.sin(ph));
       droneShipV.g.rotateX(Math.sin(ph * 0.7) * mission.waves * 0.006);
       placeSurface(shipCap, mission.shipD, -0.6);
+      // Octagrabber: inişten sonra booster'ın altına girip sabitler
+      const lb = P.has('k_octa') && mission.crafts.find(c => c.rec && c.rec.kind === 'asds' && c.landed && !c.tipped && c.alive);
+      if (lb) {
+        if (!droneShipV.octa) {
+          const og = new T.Group();
+          const body = new T.Mesh(new T.BoxGeometry(3.2, 0.9, 3.2), new T.MeshStandardMaterial({ color: 0x9a1f1f, roughness: 0.6, metalness: 0.4 }));
+          body.position.y = 0.45; og.add(body);
+          const strip = new T.Mesh(new T.BoxGeometry(3.3, 0.18, 3.3), new T.MeshStandardMaterial({ color: 0xffc400, roughness: 0.5 }));
+          strip.position.y = 0.92; og.add(strip);
+          droneShipV.g.add(og); droneShipV.octa = og;
+        }
+        if (lb.octaT === undefined) lb.octaT = mission.t;
+        const k = clamp((mission.t - lb.octaT - 4) / 14, 0, 1), e = k * k * (3 - 2 * k);
+        const dx = lb.downrange() - mission.shipD;
+        droneShipV.octa.visible = true;
+        droneShipV.octa.position.set(lerp(-34, dx, e), 3, lerp(9, 0, e));
+        if (k >= 1 && !lb.octaDone) { lb.octaDone = true; log('Octagrabber booster\'ı güverteye sabitledi', 'good'); }
+      } else if (droneShipV.octa) droneShipV.octa.visible = false;
     } else { droneShipV.g.visible = false; shipCap.visible = false; }
     if (mission && mission.fairingShipD !== undefined) {
       fairingShipV.g.visible = inFlight; placeSurface(fairingShipV.g, mission.fairingShipD, 1);
@@ -1660,6 +1693,7 @@
     for (const s of sats3d) s.g.parent && s.g.parent.remove(s.g); sats3d = [];
     mission = null; ctxCur = null; mode = 'hangar'; cam.map = false; warp = 1; cam.mode = 'chase';
     voice.stop(); blasts = []; cloudDeck.visible = false;
+    if (hiDayPending) { const im = hiDayPending; hiDayPending = null; setTimeout(() => readDayPixels(im), 50); }
     for (const id of ['bcast', 'manual-panel', 'pip-frame', 'pip-label', 'hold', 'planet']) $(id).classList.add('hidden');
     fireP.clear(); smokeP.clear(); audio.set(0); engineLight.intensity = 0;
     setSite(P.state.sel.rocket === 'ss' ? 'starbase' : 'cape'); sunHour = 11; sunWeek = P.state.week;
@@ -2375,6 +2409,7 @@
       $('loading').classList.add('hidden');
       if (!P.state.stats.launches) $('help').classList.remove('hidden');
       requestAnimationFrame(frame);
+      setTimeout(upgradeTextures, 1500);
     }, 30);
   }
   // test / hata ayıklama erişimi
